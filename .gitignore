@@ -1,0 +1,35 @@
+# Cache BAM curves — garder le dossier, ignorer le contenu
+cache_bam_curves/*
+!cache_bam_curves/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Fichiers sensibles / données
+*.xlsx
+*.xls
+*.csv
+*.json
+!requirements.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
