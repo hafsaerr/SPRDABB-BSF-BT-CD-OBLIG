@@ -1409,6 +1409,8 @@ def _page_spread() -> None:
             return f"{rounded} ans"
 
         def _build_oblig_recap_sheet(ws, df_renamed, secteur_title) -> None:
+            _ORANGE_F     = PatternFill(start_color="C8501E", end_color="C8501E", fill_type="solid")
+            _WHITE_BOLD_F = Font(bold=True, color="FFFFFF")
             """Build 3 stacked recap tables (MAX/MIN/MOYENNE) for obligations."""
             if df_renamed.empty:
                 return
