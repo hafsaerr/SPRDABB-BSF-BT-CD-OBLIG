@@ -941,7 +941,7 @@ def _page_spread() -> None:
     _HIGHLIGHT_HDRS = {"TAUX BDT", "Spread", "TAUX D'INTERET"}
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Export A : CD / BSF / BT  (logique existante, groupé par type+banque)
+    # Export A : CD / BSF / BT  (groupé par type+banque avec récaps croisés)
     # ─────────────────────────────────────────────────────────────────────────
     df_tcn_bt = df_work[df_work["Type"].isin(["CD", "BSF", "BT", "Autre"])].copy()
 
@@ -1116,24 +1116,169 @@ def _page_spread() -> None:
             _apply_number_formats(ws, n_data)
             _add_summary(ws, df_out, n_data)
 
+        # BSF grouping constants
+        _CREDIT_CONSO_TAGS = {"WAFASALAF", "SOFAC", "EQDOM", "RCI", "SALAFIN", "CETELEM", "ATTIJARI"}
+        _CREDIT_BAIL_TAGS  = {"MAGHREB", "MAGHREBBAIL", "SAHAM", "SOGELEASE", "WAFABAIL"}
+
+        def _bsf_group(bank: str) -> str:
+            t = bank.upper()
+            if t in _CREDIT_CONSO_TAGS: return "credit_conso"
+            if t in _CREDIT_BAIL_TAGS:  return "credit_bail"
+            return "autres_bsf"
+
+        _ORANGE_F    = PatternFill(start_color="C8501E", end_color="C8501E", fill_type="solid")
+        _WHITE_BOLD_F = Font(bold=True, color="FFFFFF")
+
+        def _build_cross_recap(ws, df_src, group_col, title_prefix) -> None:
+            """Build 3 stacked tables (MAX / MIN / MOYENNE) on a worksheet."""
+            if df_src.empty:
+                return
+
+            mats = sorted(df_src["_mat"].unique(), key=_mat_sort_key)
+            groups = sorted(df_src[group_col].unique())
+            n_cols = len(groups)
+
+            tables = [
+                ("RECAPULATIF DES MAX DES SPREAD",     "max"),
+                ("RECAPULATIF DES MIN DES SPREAD",     "min"),
+                ("RECAPULATIF DES MOYENNE DES SPREAD", "mean"),
+            ]
+
+            current_row = 1
+            for table_title, agg_func in tables:
+                # Title row — merged across all columns (1 label col + n_cols data cols)
+                total_cols = 1 + n_cols
+                title_cell = ws.cell(current_row, 1, f"{title_prefix} — {table_title}")
+                title_cell.fill = _ORANGE_F
+                title_cell.font = _WHITE_BOLD_F
+                title_cell.alignment = _CENTER
+                title_cell.border = _BORDER
+                if total_cols > 1:
+                    try:
+                        ws.merge_cells(
+                            start_row=current_row, start_column=1,
+                            end_row=current_row, end_column=total_cols
+                        )
+                    except Exception:
+                        pass
+                    for c in range(2, total_cols + 1):
+                        cell = ws.cell(current_row, c)
+                        cell.fill = _ORANGE_F
+                        cell.font = _WHITE_BOLD_F
+                        cell.border = _BORDER
+                current_row += 1
+
+                # Header row
+                ws.cell(current_row, 1, "MATURITE").fill = _YELLOW
+                ws.cell(current_row, 1).font = _BOLD
+                ws.cell(current_row, 1).alignment = _CENTER
+                ws.cell(current_row, 1).border = _BORDER
+                for ci, grp in enumerate(groups, 2):
+                    cell = ws.cell(current_row, ci, str(grp))
+                    cell.fill = _YELLOW
+                    cell.font = _BOLD
+                    cell.alignment = _CENTER
+                    cell.border = _BORDER
+                current_row += 1
+
+                # Data rows
+                for mat in mats:
+                    ws.cell(current_row, 1, mat).font = _BOLD
+                    ws.cell(current_row, 1).alignment = _CENTER
+                    ws.cell(current_row, 1).border = _BORDER
+                    for ci, grp in enumerate(groups, 2):
+                        mask = (df_src["_mat"] == mat) & (df_src[group_col] == grp)
+                        vals = df_src.loc[mask, "Spread"].dropna()
+                        try:
+                            vals_f = [float(v) for v in vals]
+                        except (TypeError, ValueError):
+                            vals_f = []
+                        if vals_f:
+                            if agg_func == "max":
+                                v = max(vals_f)
+                            elif agg_func == "min":
+                                v = min(vals_f)
+                            else:
+                                v = sum(vals_f) / len(vals_f)
+                            display = f"{v:.0f} BPS"
+                        else:
+                            display = "-"
+                        cell = ws.cell(current_row, ci, display)
+                        cell.alignment = _CENTER
+                        cell.border = _BORDER
+                    current_row += 1
+
+                # 2 blank rows between tables
+                current_row += 2
+
+            # Auto-width columns
+            for col_cells in ws.columns:
+                col_letter = col_cells[0].column_letter
+                max_len = max(
+                    (len(str(cell.value)) if cell.value is not None else 0)
+                    for cell in col_cells
+                )
+                ws.column_dimensions[col_letter].width = min(max(max_len + 2, 12), 50)
+
         # Si le filtre 10-70 bps donne 0 résultats, exporter tout sans filtre
         if df_xls_filt.empty and not df_xls.empty:
             df_xls_filt = df_xls.copy()
             st.warning("⚠️ Aucun instrument avec spread entre 10 et 70 bps — export de tous les instruments.")
 
+        # Add _mat column
+        df_xls_filt = df_xls_filt.copy()
+        df_xls_filt["_mat"] = df_xls_filt["ENGLONGNAME"].fillna("").apply(_mat_label_from_name)
+
+        # Split by Type
+        df_cd    = df_xls_filt[df_xls_filt["Type"] == "CD"].copy()
+        df_bsf   = df_xls_filt[df_xls_filt["Type"] == "BSF"].copy()
+        df_bt    = df_xls_filt[df_xls_filt["Type"] == "BT"].copy()
+        df_autre = df_xls_filt[~df_xls_filt["Type"].isin(["CD", "BSF", "BT"])].copy()
+
         output_tcn = io.BytesIO()
         with pd.ExcelWriter(output_tcn, engine="openpyxl") as writer:
-            if not df_xls_filt.empty:
-                _write_sheet_tcn(writer, df_xls_filt, "TOUT")
-                df_xls_filt = df_xls_filt.copy()
-                df_xls_filt["_type_nn"] = df_xls_filt["Type"].fillna("AUTRE")
-                df_xls_filt["_bank_nn"] = df_xls_filt["_bank"].fillna("AUTRE")
-                for (typ, bank), df_grp in df_xls_filt.groupby(["_type_nn", "_bank_nn"]):
-                    if not df_grp.empty:
-                        _write_sheet_tcn(writer, df_grp, f"{typ}_{bank}")
-            else:
-                # Feuille vide pour éviter l'IndexError openpyxl
+            wb = writer.book
+
+            # CD: RECAP_CD sheet first, then per-bank sheets
+            if not df_cd.empty:
+                ws_recap_cd = wb.create_sheet("RECAP_CD")
+                _build_cross_recap(ws_recap_cd, df_cd, "_bank", "CD")
+                for bank, df_grp in df_cd.groupby("_bank"):
+                    _write_sheet_tcn(writer, df_grp, f"CD_{bank}")
+
+            # BSF: split into conso / bail / autres
+            if not df_bsf.empty:
+                df_bsf["_bsf_grp"] = df_bsf["_bank"].apply(_bsf_group)
+                df_conso      = df_bsf[df_bsf["_bsf_grp"] == "credit_conso"].copy()
+                df_bail       = df_bsf[df_bsf["_bsf_grp"] == "credit_bail"].copy()
+                df_autres_bsf = df_bsf[df_bsf["_bsf_grp"] == "autres_bsf"].copy()
+                if not df_conso.empty:
+                    ws_rc = wb.create_sheet("RECAP_BSF_CONSO")
+                    _build_cross_recap(ws_rc, df_conso, "_bank", "CRÉDIT CONSOMMATION")
+                    _write_sheet_tcn(writer, df_conso, "BSF_credit_consommation")
+                if not df_bail.empty:
+                    ws_rb = wb.create_sheet("RECAP_BSF_BAIL")
+                    _build_cross_recap(ws_rb, df_bail, "_bank", "CRÉDIT BAIL")
+                    _write_sheet_tcn(writer, df_bail, "BSF_credit_bail")
+                if not df_autres_bsf.empty:
+                    _write_sheet_tcn(writer, df_autres_bsf, "BSF_autres")
+
+            # BT: RECAP_BT sheet first, then per-bank sheets
+            if not df_bt.empty:
+                ws_rbt = wb.create_sheet("RECAP_BT")
+                _build_cross_recap(ws_rbt, df_bt, "_bank", "BT")
+                for bank, df_grp in df_bt.groupby("_bank"):
+                    _write_sheet_tcn(writer, df_grp, f"BT_{bank}")
+
+            # Autres
+            if not df_autre.empty:
+                _write_sheet_tcn(writer, df_autre, "Autres")
+
+            # Fallback: if no sheets created
+            if not wb.sheetnames or (len(wb.sheetnames) == 1 and "Sheet" in wb.sheetnames):
                 pd.DataFrame(columns=["Aucune donnée"]).to_excel(writer, sheet_name="VIDE", index=False)
+            if "Sheet" in wb.sheetnames and len(wb.sheetnames) > 1:
+                del wb["Sheet"]
 
         output_tcn.seek(0)
         st.download_button(
@@ -1145,7 +1290,7 @@ def _page_spread() -> None:
         )
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Export B : OBLIG_ORDN — par secteur
+    # Export B : OBLIG_ORDN — par secteur avec récaps croisés
     # ─────────────────────────────────────────────────────────────────────────
     df_oblig = df_work[df_work["Type"] == "OBLIG_ORDN"].copy()
 
@@ -1246,18 +1391,144 @@ def _page_spread() -> None:
             _style_ws_oblig(ws)
             _apply_number_formats_oblig(ws)
 
+        def _mat_bucket_oblig(mat_ans) -> str:
+            """Map a numeric maturity in years to a display bucket label."""
+            try:
+                v = float(mat_ans)
+            except (TypeError, ValueError):
+                return "inconnue"
+            if v < 1:
+                return "mois"
+            rounded = min([1, 2, 3, 4, 5, 7, 10], key=lambda x: abs(x - v))
+            if rounded == 1:
+                return "1 an"
+            return f"{rounded} ans"
+
+        def _build_oblig_recap_sheet(ws, df_renamed, secteur_title) -> None:
+            """Build 3 stacked recap tables (MAX/MIN/MOYENNE) for obligations."""
+            if df_renamed.empty:
+                return
+
+            # Add maturity bucket column
+            df_work_r = df_renamed.copy()
+            if "MATURITE_ANS" in df_work_r.columns:
+                df_work_r["_mat_bkt"] = df_work_r["MATURITE_ANS"].apply(_mat_bucket_oblig)
+            else:
+                df_work_r["_mat_bkt"] = "inconnue"
+
+            emetteurs = sorted(df_work_r["EMETTEUR"].dropna().unique()) if "EMETTEUR" in df_work_r.columns else []
+            _bucket_order = ["mois", "1 an", "2 ans", "3 ans", "4 ans", "5 ans", "7 ans", "10 ans"]
+            present_buckets = df_work_r["_mat_bkt"].unique()
+            mat_buckets = [b for b in _bucket_order if b in present_buckets]
+            extra = [b for b in present_buckets if b not in _bucket_order]
+            mat_buckets += sorted(extra)
+
+            if not emetteurs or not mat_buckets:
+                return
+
+            tables = [
+                ("RECAPULATIF DES MAX DES SPREAD",     "max"),
+                ("RECAPULATIF DES MIN DES SPREAD",     "min"),
+                ("RECAPULATIF DES MOYENNE DES SPREAD", "mean"),
+            ]
+
+            current_row = 1
+            for table_title, agg_func in tables:
+                total_cols = 1 + len(mat_buckets)
+                title_cell = ws.cell(current_row, 1, f"{secteur_title} — {table_title}")
+                title_cell.fill = _ORANGE_F
+                title_cell.font = _WHITE_BOLD_F
+                title_cell.alignment = _CENTER
+                title_cell.border = _BORDER
+                if total_cols > 1:
+                    try:
+                        ws.merge_cells(
+                            start_row=current_row, start_column=1,
+                            end_row=current_row, end_column=total_cols
+                        )
+                    except Exception:
+                        pass
+                    for c in range(2, total_cols + 1):
+                        cell = ws.cell(current_row, c)
+                        cell.fill = _ORANGE_F
+                        cell.font = _WHITE_BOLD_F
+                        cell.border = _BORDER
+                current_row += 1
+
+                # Header row: first col = EMETTEUR, then maturity buckets
+                ws.cell(current_row, 1, "EMETTEUR").fill = _YELLOW
+                ws.cell(current_row, 1).font = _BOLD
+                ws.cell(current_row, 1).alignment = _CENTER
+                ws.cell(current_row, 1).border = _BORDER
+                for ci, bkt in enumerate(mat_buckets, 2):
+                    cell = ws.cell(current_row, ci, bkt)
+                    cell.fill = _YELLOW
+                    cell.font = _BOLD
+                    cell.alignment = _CENTER
+                    cell.border = _BORDER
+                current_row += 1
+
+                # Data rows: one per emetteur
+                for emetteur in emetteurs:
+                    ws.cell(current_row, 1, emetteur).font = _BOLD
+                    ws.cell(current_row, 1).alignment = _CENTER
+                    ws.cell(current_row, 1).border = _BORDER
+                    for ci, bkt in enumerate(mat_buckets, 2):
+                        mask = (
+                            (df_work_r["EMETTEUR"] == emetteur) &
+                            (df_work_r["_mat_bkt"] == bkt)
+                        )
+                        vals = df_work_r.loc[mask, "SPREAD_BPS"].dropna() if "SPREAD_BPS" in df_work_r.columns else pd.Series([], dtype=float)
+                        try:
+                            vals_f = [float(v) for v in vals]
+                        except (TypeError, ValueError):
+                            vals_f = []
+                        if vals_f:
+                            if agg_func == "max":
+                                v = max(vals_f)
+                            elif agg_func == "min":
+                                v = min(vals_f)
+                            else:
+                                v = sum(vals_f) / len(vals_f)
+                            display = f"{v:.0f} BPS"
+                        else:
+                            display = "-"
+                        cell = ws.cell(current_row, ci, display)
+                        cell.alignment = _CENTER
+                        cell.border = _BORDER
+                    current_row += 1
+
+                # 2 blank rows between tables
+                current_row += 2
+
+            # Auto-width columns
+            for col_cells in ws.columns:
+                col_letter = col_cells[0].column_letter
+                max_len = max(
+                    (len(str(cell.value)) if cell.value is not None else 0)
+                    for cell in col_cells
+                )
+                ws.column_dimensions[col_letter].width = min(max(max_len + 2, 12), 50)
+
         st.info(f"Export OBLIG_ORDN : **{len(df_oblig)}** obligations (hors banques).")
 
         output_oblig = io.BytesIO()
         with pd.ExcelWriter(output_oblig, engine="openpyxl") as writer:
-            # Feuille globale
+            wb_o = writer.book
             _write_oblig_sheet(writer, df_oblig, "TOUTES_OBLIG")
-            # Une feuille par secteur
             secteur_col = "SECTEUR" if "SECTEUR" in df_oblig.columns else None
             if secteur_col:
                 for secteur, df_grp in df_oblig.groupby(secteur_col):
-                    if not df_grp.empty:
-                        _write_oblig_sheet(writer, df_grp, str(secteur))
+                    if df_grp.empty:
+                        continue
+                    _write_oblig_sheet(writer, df_grp, str(secteur))
+                    # Recap sheet for this sector
+                    sn_recap = f"RECAP_{str(secteur)[:24]}"[:31]
+                    ws_rec = wb_o.create_sheet(sn_recap)
+                    df_out_grp = df_grp[_oblig_src_cols].rename(columns=_oblig_rename).reset_index(drop=True)
+                    _build_oblig_recap_sheet(ws_rec, df_out_grp, str(secteur))
+            if "Sheet" in wb_o.sheetnames and len(wb_o.sheetnames) > 1:
+                del wb_o["Sheet"]
 
         output_oblig.seek(0)
         st.download_button(
