@@ -18,10 +18,11 @@ from vba_equivalent_rates import calcul_taux
 # CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 try:
-    import streamlit as _st_tmp
-    CREDENTIALS = {_st_tmp.secrets["USERNAME"]: _st_tmp.secrets["PASSWORD"]}
+    CREDENTIALS = {
+        st.secrets["auth"]["username"]: st.secrets["auth"]["password"]
+    }
 except Exception:
-    CREDENTIALS = {"spreadABB": "albarid2026"}
+    CREDENTIALS = {"spreadABB": "SpreadABB@2026!"}
 APP_TITLE   = "Spread Manager — BSF & CD | Al Barid Bank"
 CACHE_DIR   = Path(__file__).parent / "cache_bam_curves"
 ASSETS_DIR  = Path(__file__).parent / "assets"
