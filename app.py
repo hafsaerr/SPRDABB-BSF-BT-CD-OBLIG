@@ -22,7 +22,8 @@ try:
         st.secrets["auth"]["username"]: st.secrets["auth"]["password"]
     }
 except Exception:
-    CREDENTIALS = {"spreadABB": "SpreadABB@2026!"}
+    st.error("Secrets non configurés. Contactez l'administrateur.")
+    st.stop()
 APP_TITLE   = "Spread Manager — BSF & CD | Al Barid Bank"
 CACHE_DIR   = Path(__file__).parent / "cache_bam_curves"
 ASSETS_DIR  = Path(__file__).parent / "assets"
