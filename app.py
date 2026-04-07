@@ -407,15 +407,17 @@ def _detect_rate_cols(cols: list[str]) -> list[str]:
 
 def _detect_type(row: pd.Series) -> str:
     ctgry = str(row.get("INSTRCTGRY", "")).strip().upper()
-    if ctgry == "BDT":
-        return "BT"
     if ctgry == "OBL_ORDN":
         return "OBLIG_ORDN"
-    name = (str(row.get("ENGLONGNAME", "")) + " " + str(row.get("ENGPREFERREDNAME", ""))).upper()
-    if "BSF" in name:
-        return "BSF"
-    if "CD" in name:
-        return "CD"
+    name = (str(row.get("ENGLONGNAME", "")) + " " + str(row.get("ENGPREFERREDNAME", ""))).upper().strip()
+    first_word = name.split()[0] if name.split() else ""
+    if ctgry == "TCN":
+        if first_word == "BT":
+            return "BT"
+        if "BSF" in name:
+            return "BSF"
+        if "CD" in name:
+            return "CD"
     return "Autre"
 
 def _detect_sector(issuer: str) -> str:
@@ -685,7 +687,8 @@ def _page_spread() -> None:
             mask_combined |= mask_tcn & name_mix.str.contains("BSF", regex=False)
 
     if inc_bt:
-        mask_combined |= instrctgry.eq("BDT")
+        name_first = dff["ENGLONGNAME"].fillna("").astype(str).str.strip().str.upper().str.split().str[0]
+        mask_combined |= instrctgry.eq("TCN") & name_first.eq("BT")
 
     if inc_oblig:
         mask_oblig = instrctgry.eq("OBL_ORDN")
