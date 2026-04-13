@@ -1538,7 +1538,8 @@ def _page_spread() -> None:
                         continue
                     _write_oblig_sheet(writer, df_grp, str(secteur))
                     # Recap sheet for this sector
-                    sn_recap = f"RECAP_{str(secteur)[:24]}"[:31]
+                    _sn_clean = _re.sub(r'[\\/*?:\[\]]', '', str(secteur))
+                    sn_recap = f"RECAP_{_sn_clean}"[:31]
                     ws_rec = wb_o.create_sheet(sn_recap)
                     df_out_grp = df_grp[_oblig_src_cols].rename(columns=_oblig_rename).reset_index(drop=True)
                     _build_oblig_recap_sheet(ws_rec, df_out_grp, str(secteur))
