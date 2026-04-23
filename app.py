@@ -1073,10 +1073,10 @@ def _page_spread() -> None:
         if has_spread:
             df_xls["Spread"] = df_xls["Spread (bps)"]
 
-        # Exclure uniquement les spreads négatifs (garder None = courbe absente)
+        # Spread entre 5 et 100 bps (garder None = courbe absente)
         if has_spread:
             spread_num = pd.to_numeric(df_xls["Spread (bps)"], errors="coerce")
-            df_xls_filt = df_xls[spread_num.isna() | (spread_num >= 0)].copy()
+            df_xls_filt = df_xls[spread_num.isna() | spread_num.between(5, 100)].copy()
         else:
             df_xls_filt = df_xls.copy()
 
