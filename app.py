@@ -1073,10 +1073,26 @@ def _page_spread() -> None:
         if has_spread:
             df_xls["Spread"] = df_xls["Spread (bps)"]
 
-        # Spread entre 5 et 100 bps (garder None = courbe absente)
+        # Filtre spread par maturité :
+        #   ≤ 1 an (13s, 26s, 52s, ~360-400 j) : 10–40 bps
+        #   > 1 an                              :  5–100 bps
+        #   spread = None (courbe absente)      : inclus
         if has_spread:
-            spread_num = pd.to_numeric(df_xls["Spread (bps)"], errors="coerce")
-            df_xls_filt = df_xls[spread_num.isna() | spread_num.between(5, 100)].copy()
+            def _spread_filter(row) -> bool:
+                try:
+                    s = float(row["Spread (bps)"])
+                except (TypeError, ValueError):
+                    return True  # pas de courbe → inclure
+                try:
+                    m = float(row["Maturité (ans)"])
+                except (TypeError, ValueError):
+                    return True
+                if m <= 1.1:          # ≤ ~400 jours (13s, 26s, 52s, 1 an)
+                    return 10 <= s <= 40
+                else:                 # > 1 an
+                    return 5 <= s <= 100
+
+            df_xls_filt = df_xls[df_xls.apply(_spread_filter, axis=1)].copy()
         else:
             df_xls_filt = df_xls.copy()
 
