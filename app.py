@@ -1000,35 +1000,8 @@ def _page_spread() -> None:
         if has_spread:
             df_xls["Spread"] = df_xls["Spread (bps)"]
 
-            # Contraintes spread par maturité
-            # ≤1 an (jours, semaines, mois, 1 an, 12 mois, 52 sem.) : 10–50 bps
-            # 2 ans                                                   : 10–60 bps
-            # 3 ans                                                   : 10–65 bps
-            # >3 ans                                                  : 10–70 bps
-            def _spread_ok_by_mat(row) -> bool:
-                # Si spread non calculé (courbe BDT indisponible) → inclure quand même
-                try:
-                    s = float(row["Spread (bps)"])
-                except (TypeError, ValueError):
-                    return True
-                try:
-                    m = float(row["Maturité (ans)"])
-                except (TypeError, ValueError):
-                    return True
-                if s < 10:
-                    return False
-                if m <= 1.1:
-                    return s <= 50
-                elif m <= 2.5:
-                    return s <= 60
-                elif m <= 3.5:
-                    return s <= 65
-                else:
-                    return s <= 70
-
-            df_xls_filt = df_xls[df_xls.apply(_spread_ok_by_mat, axis=1)].copy()
-        else:
-            df_xls_filt = df_xls.copy()
+        # Pas de filtre spread — tous les instruments sont exportés
+        df_xls_filt = df_xls.copy()
 
         if "Taux instrument" in df_xls_filt.columns:
             df_xls_filt["_taux_instr_pct"] = df_xls_filt["Taux instrument"].apply(
@@ -1036,13 +1009,8 @@ def _page_spread() -> None:
             )
 
         n_export = len(df_xls_filt)
-        n_total  = len(df_xls)
         if has_spread:
-            st.info(
-                f"Export CD/BSF/BT : **{n_export}** instruments retenus (sur {n_total} calculés).  \n"
-                f"Contraintes spread : ≤1 an → 10–50 bps | 2 ans → 10–60 bps | "
-                f"3 ans → 10–65 bps | >3 ans → 10–70 bps"
-            )
+            st.info(f"Export CD/BSF/BT : **{n_export}** instruments (tous spreads inclus).")
 
         _ISIN_EXACT  = {"ISINCODE","ISIN","CODEISIN","ISIN_CODE","INSTRISINOCODE"}
         _CODE_APPROX = {"INSTRCODE","INSTRUMENTCODE","INSTRNO","NEMOCODE","NEMO",
