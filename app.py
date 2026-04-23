@@ -1006,11 +1006,15 @@ def _page_spread() -> None:
             # 3 ans                                                   : 10–65 bps
             # >3 ans                                                  : 10–70 bps
             def _spread_ok_by_mat(row) -> bool:
+                # Si spread non calculé (courbe BDT indisponible) → inclure quand même
                 try:
                     s = float(row["Spread (bps)"])
+                except (TypeError, ValueError):
+                    return True
+                try:
                     m = float(row["Maturité (ans)"])
                 except (TypeError, ValueError):
-                    return False
+                    return True
                 if s < 10:
                     return False
                 if m <= 1.1:
