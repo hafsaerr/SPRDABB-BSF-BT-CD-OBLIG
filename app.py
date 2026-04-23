@@ -1073,12 +1073,15 @@ def _page_spread() -> None:
         if has_spread:
             df_xls["Spread"] = df_xls["Spread (bps)"]
 
-        # Filtre spread par maturité :
+        # Filtre spread — CD et BSF uniquement :
         #   ≤ 1 an (13s, 26s, 52s, ~360-400 j) : 10–40 bps
         #   > 1 an                              :  5–100 bps
-        #   spread = None (courbe absente)      : inclus
+        #   BT                                  : aucune contrainte
+        #   spread = None (courbe absente)      : inclus toujours
         if has_spread:
             def _spread_filter(row) -> bool:
+                if str(row.get("Type", "")).strip() == "BT":
+                    return True  # BT : aucune contrainte
                 try:
                     s = float(row["Spread (bps)"])
                 except (TypeError, ValueError):
