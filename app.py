@@ -1073,8 +1073,12 @@ def _page_spread() -> None:
         if has_spread:
             df_xls["Spread"] = df_xls["Spread (bps)"]
 
-        # Pas de filtre spread — tous les instruments sont exportés
-        df_xls_filt = df_xls.copy()
+        # Exclure uniquement les spreads négatifs (garder None = courbe absente)
+        if has_spread:
+            spread_num = pd.to_numeric(df_xls["Spread (bps)"], errors="coerce")
+            df_xls_filt = df_xls[spread_num.isna() | (spread_num >= 0)].copy()
+        else:
+            df_xls_filt = df_xls.copy()
 
         if "Taux instrument" in df_xls_filt.columns:
             df_xls_filt["_taux_instr_pct"] = df_xls_filt["Taux instrument"].apply(
