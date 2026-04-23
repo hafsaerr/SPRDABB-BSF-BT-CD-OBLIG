@@ -11,6 +11,8 @@ from typing import Optional
 import pandas as pd
 import streamlit as st
 
+from dateutil.relativedelta import relativedelta
+
 from bam_curve_fetcher import BamCurveFetcher
 from vba_equivalent_rates import calcul_taux
 
@@ -27,7 +29,62 @@ except Exception:
 APP_TITLE   = "Spread Manager — BSF & CD | Al Barid Bank"
 CACHE_DIR   = Path(__file__).parent / "cache_bam_curves"
 ASSETS_DIR  = Path(__file__).parent / "assets"
+BDT_EXCEL   = Path(__file__).parent / "courbe_bdt.xlsx"
 CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COURBE BDT — LOOKUP EXCEL (source principale)
+# ─────────────────────────────────────────────────────────────────────────────
+_BDT_MAT_COLS = ["13s", "26s", "52s", "2 ans", "5 ans", "10 ans", "15 ans", "20 ans", "30 ans"]
+
+def _col_to_days(col: str, d0: date) -> int:
+    """Convert Excel column name to number of days from emission date d0."""
+    c = col.strip().lower()
+    if c == "13s":  return 91
+    if c == "26s":  return 182
+    if c == "52s":  return 364
+    try:
+        years = int(c.split()[0])
+        d1 = d0 + relativedelta(years=years)
+        return (d1 - d0).days
+    except Exception:
+        return 0
+
+@st.cache_data(show_spinner=False)
+def _load_bdt_excel() -> Optional[object]:
+    """Load courbe_bdt.xlsx and return indexed DataFrame, or None if not found."""
+    if not BDT_EXCEL.exists():
+        return None
+    try:
+        df = pd.read_excel(BDT_EXCEL, engine="openpyxl")
+        df = df[pd.to_datetime(df["Date"], errors="coerce").notna()].copy()
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df["_date"] = df["Date"].dt.date
+        df = df.drop_duplicates(subset=["_date"])
+        df = df.set_index("_date")
+        return df
+    except Exception:
+        return None
+
+def _curve_from_excel(emission_date: date, bdt_df) -> Optional[tuple]:
+    """Return (mt_days, tx_rates) for emission_date from Excel, with ±7 day fallback."""
+    if bdt_df is None:
+        return None
+    for delta in range(0, 8):
+        for candidate in ([emission_date] if delta == 0
+                          else [emission_date - timedelta(days=delta),
+                                emission_date + timedelta(days=delta)]):
+            if candidate in bdt_df.index:
+                row = bdt_df.loc[candidate]
+                pairs = [
+                    (_col_to_days(c, emission_date), float(row[c]))
+                    for c in _BDT_MAT_COLS
+                    if c in bdt_df.columns and pd.notna(row[c])
+                ]
+                if len(pairs) >= 2:
+                    mt, tx = zip(*pairs)
+                    return list(mt), list(tx)
+    return None
 
 # ─────────────────────────────────────────────────────────────────────────────
 # BANK ISSUERS TO EXCLUDE (OBLIG_ORDN)
@@ -774,54 +831,70 @@ def _page_spread() -> None:
 
     unique_dates = sorted({d.date() for d in df_work["ISSUEDT"].dropna()})
 
-    # ── Récupération courbes BAM ───────────────────────────────────────────────
-    _sec("🌐 Récupération des courbes BDT BAM")
-    pbar    = st.progress(0.0)
-    stxt    = st.empty()
-    fetcher = BamCurveFetcher(cache_dir=str(CACHE_DIR))
+    # ── Récupération courbes BDT (Excel en priorité, BKAM en fallback) ──────────
+    _sec("🌐 Récupération des courbes BDT")
 
     total_dates = len(unique_dates)
+    bdt_df = _load_bdt_excel()
 
-    def _progress(done: int, total: int, n_cache: int, n_net: int, eta: float) -> None:
-        pbar.progress(done / max(total, 1))
-        eta_str = f" — ETA : {eta:.0f}s" if eta > 1 else ""
-        stxt.markdown(
-            f"<span style='color:#FFFFFF;font-size:0.85rem;'>"
-            f"Courbes BAM : <b>{done}/{total}</b>"
-            f" &nbsp;(Supabase/cache : {n_cache} | réseau BAM : {n_net}){eta_str}</span>",
-            unsafe_allow_html=True,
-        )
+    curves: dict = {}
 
-    curves = fetcher.get_curves_parallel(
-        unique_dates,
-        max_workers=10,
-        progress_callback=_progress,
-    )
+    if bdt_df is not None:
+        # Source principale : Excel Courbe_BDT_Complete
+        for d in unique_dates:
+            curves[d] = _curve_from_excel(d, bdt_df)
+        ok_excel = sum(1 for v in curves.values() if v is not None)
+        st.success(f"✅ {ok_excel}/{total_dates} courbes BDT chargées depuis le fichier Excel."
+                   + (f"  ⚠️ {total_dates - ok_excel} date(s) non trouvée(s) dans l'Excel."
+                      if ok_excel < total_dates else ""))
+    else:
+        st.warning("⚠️ Fichier courbe_bdt.xlsx non trouvé — utilisation du scraping BKAM.")
 
-    # Pour les dates sans courbe, chercher la date ouvrable la plus proche (±5 jours)
+    # Fallback BKAM pour les dates manquantes
     missing_dates = [d for d in unique_dates if not curves.get(d)]
     if missing_dates:
-        fallback_candidates: set[date] = set()
-        for d in missing_dates:
-            for delta in range(1, 6):
-                fallback_candidates.add(d - timedelta(days=delta))
-                fallback_candidates.add(d + timedelta(days=delta))
-        fallback_candidates -= set(unique_dates)
-        fallback_curves = fetcher.get_curves_parallel(list(fallback_candidates), max_workers=10)
-        for d in missing_dates:
-            for delta in range(1, 6):
-                for candidate in (d - timedelta(days=delta), d + timedelta(days=delta)):
-                    if fallback_curves.get(candidate):
-                        curves[d] = fallback_curves[candidate]
-                        break
-                if curves.get(d):
-                    break
+        pbar  = st.progress(0.0)
+        stxt  = st.empty()
+        fetcher = BamCurveFetcher(cache_dir=str(CACHE_DIR))
 
-    pbar.empty(); stxt.empty()
-    ok     = sum(1 for v in curves.values() if v is not None)
-    no_data = total_dates - ok
-    st.success(f"✅ {ok} courbes BDT récupérées (Supabase + cache + BAM)."
-               + (f"  ❌ {no_data} date(s) sans données BAM (jour non ouvré)." if no_data else ""))
+        def _progress(done: int, total: int, n_cache: int, n_net: int, eta: float) -> None:
+            pbar.progress(done / max(total, 1))
+            stxt.markdown(
+                f"<span style='color:#FFFFFF;font-size:0.85rem;'>"
+                f"BKAM fallback : <b>{done}/{total}</b> dates</span>",
+                unsafe_allow_html=True,
+            )
+
+        bkam_curves = fetcher.get_curves_parallel(
+            missing_dates, max_workers=10, progress_callback=_progress
+        )
+        for d in missing_dates:
+            if bkam_curves.get(d):
+                curves[d] = bkam_curves[d]
+
+        # ±5 jours pour les dates encore manquantes
+        still_missing = [d for d in missing_dates if not curves.get(d)]
+        if still_missing:
+            fallback_candidates: set[date] = set()
+            for d in still_missing:
+                for delta in range(1, 6):
+                    fallback_candidates.add(d - timedelta(days=delta))
+                    fallback_candidates.add(d + timedelta(days=delta))
+            fallback_candidates -= set(unique_dates)
+            fallback_curves = fetcher.get_curves_parallel(list(fallback_candidates), max_workers=10)
+            for d in still_missing:
+                for delta in range(1, 6):
+                    for candidate in (d - timedelta(days=delta), d + timedelta(days=delta)):
+                        if fallback_curves.get(candidate):
+                            curves[d] = fallback_curves[candidate]
+                            break
+                    if curves.get(d):
+                        break
+
+        pbar.empty(); stxt.empty()
+        ok_bkam = sum(1 for d in missing_dates if curves.get(d))
+        if ok_bkam:
+            st.info(f"ℹ️ {ok_bkam} date(s) supplémentaire(s) récupérées depuis BKAM.")
 
     # ── Calcul taux BDT + spread ───────────────────────────────────────────────
     bdt_rates:   list[Optional[float]] = []
