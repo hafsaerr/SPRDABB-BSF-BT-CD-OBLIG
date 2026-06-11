@@ -35,20 +35,25 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 # ─────────────────────────────────────────────────────────────────────────────
 # COURBE BDT — LOOKUP EXCEL (source principale)
 # ─────────────────────────────────────────────────────────────────────────────
-_BDT_MAT_COLS = ["13s", "26s", "52s", "2 ans", "5 ans", "10 ans", "15 ans", "20 ans", "30 ans"]
+_BDT_MAT_COLS = [
+    "13s", "26s", "52s",
+    "1ans", "2ans", "3ans", "4ans", "5ans", "6ans", "7ans", "8ans", "9ans", "10ans",
+    "11ans", "12ans", "13ans", "14ans", "15ans", "16ans", "17ans", "18ans", "19ans", "20ans",
+    "21ans", "22ans", "23ans", "24ans", "25ans", "26ans", "27ans", "28ans", "29ans", "30ans",
+]
 
 def _col_to_days(col: str, d0: date) -> int:
     """Convert Excel column name to number of days from emission date d0."""
+    import re
     c = col.strip().lower()
     if c == "13s":  return 91
     if c == "26s":  return 182
     if c == "52s":  return 364
-    try:
-        years = int(c.split()[0])
-        d1 = d0 + relativedelta(years=years)
+    m = re.match(r'^(\d+)\s*ans?$', c)
+    if m:
+        d1 = d0 + relativedelta(years=int(m.group(1)))
         return (d1 - d0).days
-    except Exception:
-        return 0
+    return 0
 
 @st.cache_data(show_spinner=False)
 def _load_bdt_excel() -> Optional[object]:
@@ -57,8 +62,9 @@ def _load_bdt_excel() -> Optional[object]:
         return None
     try:
         df = pd.read_excel(BDT_EXCEL, engine="openpyxl")
-        df = df[pd.to_datetime(df["Date"], errors="coerce").notna()].copy()
-        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        date_col = "Date" if "Date" in df.columns else "Maturite"
+        df = df[pd.to_datetime(df[date_col], errors="coerce").notna()].copy()
+        df["Date"] = pd.to_datetime(df[date_col], errors="coerce")
         df["_date"] = df["Date"].dt.date
         df = df.drop_duplicates(subset=["_date"])
         df = df.set_index("_date")
