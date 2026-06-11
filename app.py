@@ -463,7 +463,9 @@ def _to_decimal(val) -> Optional[float]:
         v = float(val)
     except (ValueError, TypeError):
         return None
-    return v / 100.0 if abs(v) > 1 else v
+    if abs(v) > 100: return v / 10000.0   # basis points (ex: 601 → 0.0601)
+    if abs(v) > 1:   return v / 100.0    # percentage  (ex: 6.01 → 0.0601)
+    return v                              # already decimal (ex: 0.0601)
 
 _RATE_KW = ["COUPONRT","TAUX","RATE","RENDEMENT","INTRATE","REND","EMISSION","INTERESTRATE"]
 
@@ -1034,7 +1036,7 @@ def _page_spread() -> None:
     if not df_tcn_bt.empty:
         _sec("📥 Export Excel — CD / BSF / BT")
 
-        _BANK_ALIASES = {"SGMB": "SAHAM"}
+        _BANK_ALIASES = {"SGMB": "SAHAM", "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW"}
 
         def _bank_tag(name: str) -> str:
             parts = str(name).strip().split()
@@ -1077,6 +1079,7 @@ def _page_spread() -> None:
         df_xls = df_tcn_bt.copy()
         df_xls["_bank"] = (
             df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str).str.strip()
+            .apply(lambda x: _BANK_ALIASES.get(x.upper(), x))
             if "PREFERREDNAMEREGISTRAR" in df_xls.columns
             else df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
         )
@@ -2087,7 +2090,9 @@ def _to_decimal(val) -> Optional[float]:
         v = float(val)
     except (ValueError, TypeError):
         return None
-    return v / 100.0 if abs(v) > 1 else v
+    if abs(v) > 100: return v / 10000.0   # basis points (ex: 601 → 0.0601)
+    if abs(v) > 1:   return v / 100.0    # percentage  (ex: 6.01 → 0.0601)
+    return v                              # already decimal (ex: 0.0601)
 
 _RATE_KW = ["COUPONRT","TAUX","RATE","RENDEMENT","INTRATE","REND","EMISSION","INTERESTRATE"]
 
@@ -2639,7 +2644,7 @@ def _page_spread() -> None:
     if not df_tcn_bt.empty:
         _sec("📥 Export Excel — CD / BSF / BT")
 
-        _BANK_ALIASES = {"SGMB": "SAHAM"}
+        _BANK_ALIASES = {"SGMB": "SAHAM", "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW"}
 
         def _bank_tag(name: str) -> str:
             parts = str(name).strip().split()
@@ -2682,6 +2687,7 @@ def _page_spread() -> None:
         df_xls = df_tcn_bt.copy()
         df_xls["_bank"] = (
             df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str).str.strip()
+            .apply(lambda x: _BANK_ALIASES.get(x.upper(), x))
             if "PREFERREDNAMEREGISTRAR" in df_xls.columns
             else df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
         )
