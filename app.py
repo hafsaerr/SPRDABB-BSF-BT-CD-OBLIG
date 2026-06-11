@@ -1036,7 +1036,15 @@ def _page_spread() -> None:
     if not df_tcn_bt.empty:
         _sec("📥 Export Excel — CD / BSF / BT")
 
-        _BANK_ALIASES = {"SGMB": "SAHAM", "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW"}
+        _BANK_ALIASES = {
+            "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW",
+            "CREDIT AGRICOL": "CAM", "CREDIT AGRICOLE": "CAM", "CREDIT AG": "CAM",
+            "CREDIT AGRICOLE DU MAROC": "CAM", "CAM": "CAM",
+            "CREDIT DU MAROC": "CDM",
+            "BOZ": "BOA", "BMCE": "BOA", "BANK OF AFRICA": "BOA",
+            "BMCE BANK": "BOA", "BANQUE MAROCAINE DU COMMERCE EXTERIEUR": "BOA",
+            "SGMB": "SAHAM",
+        }
 
         def _bank_tag(name: str) -> str:
             parts = str(name).strip().split()
@@ -2644,7 +2652,15 @@ def _page_spread() -> None:
     if not df_tcn_bt.empty:
         _sec("📥 Export Excel — CD / BSF / BT")
 
-        _BANK_ALIASES = {"SGMB": "SAHAM", "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW"}
+        _BANK_ALIASES = {
+            "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW",
+            "CREDIT AGRICOL": "CAM", "CREDIT AGRICOLE": "CAM", "CREDIT AG": "CAM",
+            "CREDIT AGRICOLE DU MAROC": "CAM", "CAM": "CAM",
+            "CREDIT DU MAROC": "CDM",
+            "BOZ": "BOA", "BMCE": "BOA", "BANK OF AFRICA": "BOA",
+            "BMCE BANK": "BOA", "BANQUE MAROCAINE DU COMMERCE EXTERIEUR": "BOA",
+            "SGMB": "SAHAM",
+        }
 
         def _bank_tag(name: str) -> str:
             parts = str(name).strip().split()
