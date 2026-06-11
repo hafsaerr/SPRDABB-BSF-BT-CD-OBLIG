@@ -293,8 +293,8 @@ def export_oblig(
     if "SECTEUR" in df_oblig.columns:
         src_cols.append("SECTEUR")
     src_cols += ["ISSUEDT", "MATURITYDT_L"]
-    if rate_col and rate_col in df_oblig.columns:
-        src_cols.append(rate_col)
+    if rate_col and "Taux instrument" in df_oblig.columns:
+        src_cols.append("Taux instrument")
     src_cols += ["Maturité (ans)", "Taux BDT"]
     if "Spread (bps)" in df_oblig.columns:
         src_cols.append("Spread (bps)")
@@ -309,11 +309,10 @@ def export_oblig(
         "Maturité (ans)":      "MATURITE_ANS",
         "Taux BDT":            "TAUX_BDT_INTERP",
         "Spread (bps)":        "SPREAD_BPS",
+        "Taux instrument":     "INTERESTRATE",
     }
     if _instrid:
         rename[_instrid] = "INSTRID"
-    if rate_col:
-        rename[rate_col] = "INTERESTRATE"
 
     def _write_sheet(writer, df_s: pd.DataFrame, sheet_name: str) -> None:
         sn = _sheet_name_oblig(sheet_name)

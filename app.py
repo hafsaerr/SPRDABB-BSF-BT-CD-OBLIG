@@ -1426,8 +1426,8 @@ def _page_spread() -> None:
         if "SECTEUR" in df_oblig.columns:
             _oblig_src_cols.append("SECTEUR")
         _oblig_src_cols += ["ISSUEDT", "MATURITYDT_L"]
-        if rate_col and rate_col in df_oblig.columns:
-            _oblig_src_cols.append(rate_col)
+        if rate_col and "Taux instrument" in df_oblig.columns:
+            _oblig_src_cols.append("Taux instrument")
         _oblig_src_cols += ["Maturité (ans)", "Taux BDT"]
         if "Spread (bps)" in df_oblig.columns:
             _oblig_src_cols.append("Spread (bps)")
@@ -1442,11 +1442,10 @@ def _page_spread() -> None:
             "Maturité (ans)":     "MATURITE_ANS",
             "Taux BDT":           "TAUX_BDT_INTERP",
             "Spread (bps)":       "SPREAD_BPS",
+            "Taux instrument":    "INTERESTRATE",
         }
         if _instrid_col:
             _oblig_rename[_instrid_col] = "INSTRID"
-        if rate_col:
-            _oblig_rename[rate_col] = "INTERESTRATE"
 
         def _style_ws_oblig(ws) -> None:
             """En-têtes bleu marine gras blanc + largeurs auto."""
@@ -3004,8 +3003,8 @@ def _page_spread() -> None:
         if "SECTEUR" in df_oblig.columns:
             _oblig_src_cols.append("SECTEUR")
         _oblig_src_cols += ["ISSUEDT", "MATURITYDT_L"]
-        if rate_col and rate_col in df_oblig.columns:
-            _oblig_src_cols.append(rate_col)
+        if rate_col and "Taux instrument" in df_oblig.columns:
+            _oblig_src_cols.append("Taux instrument")
         _oblig_src_cols += ["Maturité (ans)", "Taux BDT"]
         if "Spread (bps)" in df_oblig.columns:
             _oblig_src_cols.append("Spread (bps)")
@@ -3020,11 +3019,10 @@ def _page_spread() -> None:
             "Maturité (ans)":     "MATURITE_ANS",
             "Taux BDT":           "TAUX_BDT_INTERP",
             "Spread (bps)":       "SPREAD_BPS",
+            "Taux instrument":    "INTERESTRATE",
         }
         if _instrid_col:
             _oblig_rename[_instrid_col] = "INSTRID"
-        if rate_col:
-            _oblig_rename[rate_col] = "INTERESTRATE"
 
         def _style_ws_oblig(ws) -> None:
             """En-têtes bleu marine gras blanc + largeurs auto."""
