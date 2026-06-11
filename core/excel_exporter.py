@@ -288,8 +288,9 @@ def export_oblig(
     if _instrid:
         src_cols.append(_instrid)
     src_cols.append("ENGPREFERREDNAME")
-    if "PREFERREDNAMEISSUER" in df_oblig.columns:
-        src_cols.append("PREFERREDNAMEISSUER")
+    _emetteur_col = next((c for c in ["PREFERREDNAMEREGISTRAR", "PREFERREDNAMEISSUER"] if c in df_oblig.columns), None)
+    if _emetteur_col:
+        src_cols.append(_emetteur_col)
     if "SECTEUR" in df_oblig.columns:
         src_cols.append("SECTEUR")
     src_cols += ["ISSUEDT", "MATURITYDT_L"]
@@ -302,7 +303,6 @@ def export_oblig(
 
     rename: dict = {
         "ENGPREFERREDNAME":   "NOM_INSTRUMENT",
-        "PREFERREDNAMEISSUER": "EMETTEUR",
         "SECTEUR":             "SECTEUR",
         "ISSUEDT":             "DATE_EMISSION",
         "MATURITYDT_L":        "DATE_ECHEANCE",
@@ -311,6 +311,8 @@ def export_oblig(
         "Spread (bps)":        "SPREAD_BPS",
         "Taux instrument":     "INTERESTRATE",
     }
+    if _emetteur_col:
+        rename[_emetteur_col] = "EMETTEUR"
     if _instrid:
         rename[_instrid] = "INSTRID"
 

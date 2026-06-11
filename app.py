@@ -988,8 +988,9 @@ def _page_spread() -> None:
     base_cols  = ["ISSUEDT", "MATURITYDT_L", "Maturité (ans)", "ENGLONGNAME", "Type", "INSTRCTGRY"]
     if inc_oblig and "SECTEUR" in df_work.columns:
         base_cols.append("SECTEUR")
-    if inc_oblig and "PREFERREDNAMEISSUER" in df_work.columns:
-        base_cols.insert(4, "PREFERREDNAMEISSUER")
+    _rc = next((c for c in ["PREFERREDNAMEREGISTRAR", "PREFERREDNAMEISSUER"] if c in df_work.columns), None)
+    if _rc:
+        base_cols.insert(4, _rc)
     extra_cols = (["Taux instrument", "Taux BDT", "Spread (bps)"] if rate_col else ["Taux BDT"])
     disp = [c for c in base_cols + extra_cols if c in df_work.columns]
     # Dédupliquer en gardant l'ordre
@@ -1074,7 +1075,11 @@ def _page_spread() -> None:
             return (3, n)
 
         df_xls = df_tcn_bt.copy()
-        df_xls["_bank"] = df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
+        df_xls["_bank"] = (
+            df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str).str.strip()
+            if "PREFERREDNAMEREGISTRAR" in df_xls.columns
+            else df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
+        )
 
         has_spread = "Spread (bps)" in df_xls.columns
         if has_spread:
@@ -1228,8 +1233,8 @@ def _page_spread() -> None:
 
         def _bsf_group(bank: str) -> str:
             t = bank.upper()
-            if t in _CREDIT_CONSO_TAGS: return "credit_conso"
-            if t in _CREDIT_BAIL_TAGS:  return "credit_bail"
+            if any(tag in t for tag in _CREDIT_CONSO_TAGS): return "credit_conso"
+            if any(tag in t for tag in _CREDIT_BAIL_TAGS):  return "credit_bail"
             return "autres_bsf"
 
         _ORANGE_F    = PatternFill(start_color="C8501E", end_color="C8501E", fill_type="solid")
@@ -1421,8 +1426,9 @@ def _page_spread() -> None:
         if _instrid_col:
             _oblig_src_cols.append(_instrid_col)
         _oblig_src_cols.append("ENGPREFERREDNAME")
-        if "PREFERREDNAMEISSUER" in df_oblig.columns:
-            _oblig_src_cols.append("PREFERREDNAMEISSUER")
+        _emetteur_col = next((c for c in ["PREFERREDNAMEREGISTRAR", "PREFERREDNAMEISSUER"] if c in df_oblig.columns), None)
+        if _emetteur_col:
+            _oblig_src_cols.append(_emetteur_col)
         if "SECTEUR" in df_oblig.columns:
             _oblig_src_cols.append("SECTEUR")
         _oblig_src_cols += ["ISSUEDT", "MATURITYDT_L"]
@@ -1435,7 +1441,6 @@ def _page_spread() -> None:
 
         _oblig_rename: dict = {
             "ENGPREFERREDNAME":   "NOM_INSTRUMENT",
-            "PREFERREDNAMEISSUER":"EMETTEUR",
             "SECTEUR":            "SECTEUR",
             "ISSUEDT":            "DATE_EMISSION",
             "MATURITYDT_L":       "DATE_ECHEANCE",
@@ -1444,6 +1449,8 @@ def _page_spread() -> None:
             "Spread (bps)":       "SPREAD_BPS",
             "Taux instrument":    "INTERESTRATE",
         }
+        if _emetteur_col:
+            _oblig_rename[_emetteur_col] = "EMETTEUR"
         if _instrid_col:
             _oblig_rename[_instrid_col] = "INSTRID"
 
@@ -2586,8 +2593,9 @@ def _page_spread() -> None:
     base_cols  = ["ISSUEDT", "MATURITYDT_L", "Maturité (ans)", "ENGLONGNAME", "Type", "INSTRCTGRY"]
     if inc_oblig and "SECTEUR" in df_work.columns:
         base_cols.append("SECTEUR")
-    if inc_oblig and "PREFERREDNAMEISSUER" in df_work.columns:
-        base_cols.insert(4, "PREFERREDNAMEISSUER")
+    _rc = next((c for c in ["PREFERREDNAMEREGISTRAR", "PREFERREDNAMEISSUER"] if c in df_work.columns), None)
+    if _rc:
+        base_cols.insert(4, _rc)
     extra_cols = (["Taux instrument", "Taux BDT", "Spread (bps)"] if rate_col else ["Taux BDT"])
     disp = [c for c in base_cols + extra_cols if c in df_work.columns]
     # Dédupliquer en gardant l'ordre
@@ -2672,7 +2680,11 @@ def _page_spread() -> None:
             return (3, n)
 
         df_xls = df_tcn_bt.copy()
-        df_xls["_bank"] = df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
+        df_xls["_bank"] = (
+            df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str).str.strip()
+            if "PREFERREDNAMEREGISTRAR" in df_xls.columns
+            else df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
+        )
 
         has_spread = "Spread (bps)" in df_xls.columns
         if has_spread:
@@ -2805,8 +2817,8 @@ def _page_spread() -> None:
 
         def _bsf_group(bank: str) -> str:
             t = bank.upper()
-            if t in _CREDIT_CONSO_TAGS: return "credit_conso"
-            if t in _CREDIT_BAIL_TAGS:  return "credit_bail"
+            if any(tag in t for tag in _CREDIT_CONSO_TAGS): return "credit_conso"
+            if any(tag in t for tag in _CREDIT_BAIL_TAGS):  return "credit_bail"
             return "autres_bsf"
 
         _ORANGE_F    = PatternFill(start_color="C8501E", end_color="C8501E", fill_type="solid")
@@ -2998,8 +3010,9 @@ def _page_spread() -> None:
         if _instrid_col:
             _oblig_src_cols.append(_instrid_col)
         _oblig_src_cols.append("ENGPREFERREDNAME")
-        if "PREFERREDNAMEISSUER" in df_oblig.columns:
-            _oblig_src_cols.append("PREFERREDNAMEISSUER")
+        _emetteur_col = next((c for c in ["PREFERREDNAMEREGISTRAR", "PREFERREDNAMEISSUER"] if c in df_oblig.columns), None)
+        if _emetteur_col:
+            _oblig_src_cols.append(_emetteur_col)
         if "SECTEUR" in df_oblig.columns:
             _oblig_src_cols.append("SECTEUR")
         _oblig_src_cols += ["ISSUEDT", "MATURITYDT_L"]
@@ -3012,7 +3025,6 @@ def _page_spread() -> None:
 
         _oblig_rename: dict = {
             "ENGPREFERREDNAME":   "NOM_INSTRUMENT",
-            "PREFERREDNAMEISSUER":"EMETTEUR",
             "SECTEUR":            "SECTEUR",
             "ISSUEDT":            "DATE_EMISSION",
             "MATURITYDT_L":       "DATE_ECHEANCE",
@@ -3021,6 +3033,8 @@ def _page_spread() -> None:
             "Spread (bps)":       "SPREAD_BPS",
             "Taux instrument":    "INTERESTRATE",
         }
+        if _emetteur_col:
+            _oblig_rename[_emetteur_col] = "EMETTEUR"
         if _instrid_col:
             _oblig_rename[_instrid_col] = "INSTRID"
 
