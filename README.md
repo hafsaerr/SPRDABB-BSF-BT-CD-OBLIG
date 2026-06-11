@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # SpreadABB — Spread Manager · Al Barid Bank
 
 Application Streamlit de calcul de spread taux pour les instruments du marché obligataire marocain (BSF, CD, BT, Obligations) contre la courbe BDT de Bank Al-Maghrib.
@@ -120,3 +121,7 @@ Colonnes obligatoires :
 | `aiohttp` | Téléchargement async des courbes BAM |
 | `beautifulsoup4` | Scraping bkam.ma |
 | `python-dateutil` | Calculs de maturité |
+=======
+# SPRDABB-BSF-BT-CD-OBLIG
+SPREAD DES BT BSF CD OBLIG
+>>>>>>> 0598971e930530cdec79064431656aaa9a65f772
