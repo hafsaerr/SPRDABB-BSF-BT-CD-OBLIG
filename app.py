@@ -1036,20 +1036,30 @@ def _page_spread() -> None:
     if not df_tcn_bt.empty:
         _sec("📥 Export Excel — CD / BSF / BT")
 
-        _BANK_ALIASES = {
-            "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW",
-            "CREDIT AGRICOL": "CAM", "CREDIT AGRICOLE": "CAM", "CREDIT AG": "CAM",
-            "CREDIT AGRICOLE DU MAROC": "CAM", "CAM": "CAM",
-            "CREDIT DU MAROC": "CDM",
-            "BOZ": "BOA", "BMCE": "BOA", "BANK OF AFRICA": "BOA",
-            "BMCE BANK": "BOA", "BANQUE MAROCAINE DU COMMERCE EXTERIEUR": "BOA",
-            "SGMB": "SAHAM",
-        }
+        _BANK_ALIASES = [
+            ("CREDIT AGRICOLE DU MAROC", "CAM"),
+            ("CREDIT AGRICOLE", "CAM"),
+            ("CREDIT AGRICOL", "CAM"),
+            ("CREDIT AG", "CAM"),
+            ("CREDIT DU MAROC", "CDM"),
+            ("ATTIJARIWAFA", "ATW"),
+            ("BANK OF AFRICA", "BOA"),
+            ("BMCE", "BOA"),
+            ("BOZ", "BOA"),
+            ("SGMB", "SAHAM"),
+        ]
+
+        def _normalize_bank(x: str) -> str:
+            u = str(x).strip().upper()
+            for key, canonical in _BANK_ALIASES:
+                if key in u:
+                    return canonical
+            return str(x).strip()
 
         def _bank_tag(name: str) -> str:
             parts = str(name).strip().split()
             raw = parts[1].upper() if len(parts) >= 2 else "AUTRE"
-            return _BANK_ALIASES.get(raw, raw)
+            return _normalize_bank(raw)
 
         def _mat_label_from_name(details) -> str:
             s = "" if details is None else str(details).strip().lower()
@@ -1086,8 +1096,8 @@ def _page_spread() -> None:
 
         df_xls = df_tcn_bt.copy()
         df_xls["_bank"] = (
-            df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str).str.strip()
-            .apply(lambda x: _BANK_ALIASES.get(x.upper(), x))
+            df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str)
+            .apply(_normalize_bank)
             if "PREFERREDNAMEREGISTRAR" in df_xls.columns
             else df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
         )
@@ -2652,20 +2662,30 @@ def _page_spread() -> None:
     if not df_tcn_bt.empty:
         _sec("📥 Export Excel — CD / BSF / BT")
 
-        _BANK_ALIASES = {
-            "ATTIJARIWAFA": "ATW", "ATTIJARIWAFA BANK": "ATW",
-            "CREDIT AGRICOL": "CAM", "CREDIT AGRICOLE": "CAM", "CREDIT AG": "CAM",
-            "CREDIT AGRICOLE DU MAROC": "CAM", "CAM": "CAM",
-            "CREDIT DU MAROC": "CDM",
-            "BOZ": "BOA", "BMCE": "BOA", "BANK OF AFRICA": "BOA",
-            "BMCE BANK": "BOA", "BANQUE MAROCAINE DU COMMERCE EXTERIEUR": "BOA",
-            "SGMB": "SAHAM",
-        }
+        _BANK_ALIASES = [
+            ("CREDIT AGRICOLE DU MAROC", "CAM"),
+            ("CREDIT AGRICOLE", "CAM"),
+            ("CREDIT AGRICOL", "CAM"),
+            ("CREDIT AG", "CAM"),
+            ("CREDIT DU MAROC", "CDM"),
+            ("ATTIJARIWAFA", "ATW"),
+            ("BANK OF AFRICA", "BOA"),
+            ("BMCE", "BOA"),
+            ("BOZ", "BOA"),
+            ("SGMB", "SAHAM"),
+        ]
+
+        def _normalize_bank(x: str) -> str:
+            u = str(x).strip().upper()
+            for key, canonical in _BANK_ALIASES:
+                if key in u:
+                    return canonical
+            return str(x).strip()
 
         def _bank_tag(name: str) -> str:
             parts = str(name).strip().split()
             raw = parts[1].upper() if len(parts) >= 2 else "AUTRE"
-            return _BANK_ALIASES.get(raw, raw)
+            return _normalize_bank(raw)
 
         def _mat_label_from_name(details) -> str:
             s = "" if details is None else str(details).strip().lower()
@@ -2702,8 +2722,8 @@ def _page_spread() -> None:
 
         df_xls = df_tcn_bt.copy()
         df_xls["_bank"] = (
-            df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str).str.strip()
-            .apply(lambda x: _BANK_ALIASES.get(x.upper(), x))
+            df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str)
+            .apply(_normalize_bank)
             if "PREFERREDNAMEREGISTRAR" in df_xls.columns
             else df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
         )
