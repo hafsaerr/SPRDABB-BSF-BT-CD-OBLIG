@@ -1409,7 +1409,8 @@ def _page_spread() -> None:
                     ws.cell(r, hdr["INTERESTRATE"]).number_format    = "0.00%"
 
         def _sheet_name_oblig(secteur: str) -> str:
-            return secteur.replace("/", "-")[:31]
+            import re as _re
+            return _re.sub(r'[\[\]:*?/\\]', '-', str(secteur))[:31]
 
         def _write_oblig_sheet(writer, df_s: pd.DataFrame, sheet_name: str) -> None:
             sn = _sheet_name_oblig(sheet_name)
@@ -1560,7 +1561,15 @@ def _page_spread() -> None:
                         continue
                     _write_oblig_sheet(writer, df_grp, str(secteur))
                     # Recap sheet for this sector
-                    sn_recap = f"RECAP_{str(secteur)[:24]}"[:31]
+                    import re as _re
+                    _sn = _re.sub(r'[\[\]:*?/\\]', '_', str(secteur))
+                    sn_recap = f"RECAP_{_sn[:24]}"[:31]
+                    # Avoid duplicate sheet names
+                    _idx = 1
+                    _base = sn_recap
+                    while sn_recap in wb_o.sheetnames:
+                        sn_recap = f"{_base[:28]}_{_idx}"[:31]
+                        _idx += 1
                     ws_rec = wb_o.create_sheet(sn_recap)
                     df_out_grp = df_grp[_oblig_src_cols].rename(columns=_oblig_rename).reset_index(drop=True)
                     _build_oblig_recap_sheet(ws_rec, df_out_grp, str(secteur))
