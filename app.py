@@ -408,7 +408,9 @@ def _detect_rate_cols(cols: list[str]) -> list[str]:
 
 def _detect_type(row: pd.Series) -> str:
     ctgry = str(row.get("INSTRCTGRY", "")).strip().upper()
-    if ctgry == "BDT":
+    # BT = premier mot de ENGPREFERREDNAME == "BT" (pas "BDT" = Bons Du Trésor)
+    pref_words = str(row.get("ENGPREFERREDNAME", "")).strip().split()
+    if pref_words and pref_words[0].upper() == "BT":
         return "BT"
     if ctgry == "OBL_ORDN":
         return "OBLIG_ORDN"
@@ -668,6 +670,11 @@ def _page_spread() -> None:
     instrctgry  = dff["INSTRCTGRY"].fillna("").astype(str).str.strip().str.upper()
     name_mix    = (dff["ENGLONGNAME"].fillna("").astype(str)
                    + " " + dff["ENGPREFERREDNAME"].fillna("").astype(str)).str.upper()
+    # BT = premier mot de ENGPREFERREDNAME == "BT" (exclut "BDT" = Bons Du Trésor)
+    mask_bt_name = (
+        dff["ENGPREFERREDNAME"].fillna("").astype(str).str.strip()
+        .str.split().str[0].fillna("").str.upper().eq("BT")
+    )
 
     # Filtre date d'émission + maturité résiduelle (communs à tous les types)
     mask_issuedt = dff["_idt"].between(date_iss_min, date_iss_max)
@@ -686,7 +693,7 @@ def _page_spread() -> None:
             mask_combined |= mask_tcn & name_mix.str.contains("BSF", regex=False)
 
     if inc_bt:
-        mask_combined |= instrctgry.eq("BDT")
+        mask_combined |= mask_bt_name
 
     if inc_oblig:
         mask_oblig = instrctgry.eq("OBL_ORDN")
@@ -711,7 +718,7 @@ def _page_spread() -> None:
     if inc_bsf:
         type_counts["BSF"] = int((mask_combined & instrctgry.eq("TCN") & name_mix.str.contains("BSF", regex=False)).sum())
     if inc_bt:
-        type_counts["BT"] = int((mask_combined & instrctgry.eq("BDT")).sum())
+        type_counts["BT"] = int((mask_combined & mask_bt_name).sum())
     if inc_oblig:
         _m_oblig = mask_combined & instrctgry.eq("OBL_ORDN")
         type_counts["OBLIG"] = int(_m_oblig.sum())
@@ -1011,9 +1018,8 @@ def _page_spread() -> None:
 
         df_xls = df_tcn_bt.copy()
         df_xls["_bank"] = (
-            df_xls["PREFERREDNAMEREGISTRAR"].fillna("AUTRE").astype(str)
-            .apply(_normalize_bank)
-            if "PREFERREDNAMEREGISTRAR" in df_xls.columns
+            df_xls["PREFERREDNAMEISSUER"].fillna("AUTRE").astype(str).str.strip()
+            if "PREFERREDNAMEISSUER" in df_xls.columns
             else df_xls["ENGLONGNAME"].fillna("").apply(_bank_tag)
         )
 
@@ -1132,8 +1138,20 @@ def _page_spread() -> None:
                     if ci == 1: cell.font = _BOLD
                 rr += 1
 
+        def _safe_sheet_name(writer, raw_name: str) -> str:
+            """Sanitize + truncate + dedupe an Excel sheet name (issuer names can
+            contain '/', ':', etc. and collide once truncated to 31 chars)."""
+            sn = _re.sub(r'[\[\]:*?/\\]', '-', str(raw_name)).strip()[:31] or "AUTRE"
+            existing = set(writer.book.sheetnames)
+            base, i = sn, 1
+            while sn in existing:
+                suffix = f"_{i}"
+                sn = f"{base[:31 - len(suffix)]}{suffix}"
+                i += 1
+            return sn
+
         def _write_sheet_tcn(writer, df_s: pd.DataFrame, sheet_name: str) -> None:
-            sn     = sheet_name[:31]
+            sn     = _safe_sheet_name(writer, sheet_name)
             df_out = df_s[_exp_cols].rename(columns=_col_labels).reset_index(drop=True)
             df_out.to_excel(writer, sheet_name=sn, index=False)
             ws     = writer.sheets[sn]
@@ -1142,14 +1160,20 @@ def _page_spread() -> None:
             _apply_number_formats(ws, n_data)
             _add_summary(ws, df_out, n_data)
 
-        # BSF grouping constants
-        _CREDIT_CONSO_TAGS = {"WAFASALAF", "SOFAC", "EQDOM", "RCI", "SALAFIN", "CETELEM", "ATTIJARI"}
-        _CREDIT_BAIL_TAGS  = {"MAGHREB", "MAGHREBBAIL", "SAHAM", "SOGELEASE", "WAFABAIL"}
+        # BSF grouping — match exact PREFERREDNAMEISSUER name (via _bank)
+        _CREDIT_CONSO_ISSUERS = {
+            "SOFAC CREDIT", "SALAFIN", "AXA CREDIT", "WAFASALAF",
+            "EQDOM",  # = SEDM, écrit "EQDOM" dans PREFERREDNAMEISSUER
+            "TASLIF", "RCI",
+        }
+        _CREDIT_BAIL_ISSUERS = {
+            "MA LEASING", "MAGHREB BAIL", "BMCI LEAS", "SAHAM LEASING", "WAFABAIL",
+        }
 
-        def _bsf_group(bank: str) -> str:
-            t = bank.upper()
-            if any(tag in t for tag in _CREDIT_CONSO_TAGS): return "credit_conso"
-            if any(tag in t for tag in _CREDIT_BAIL_TAGS):  return "credit_bail"
+        def _bsf_group(issuer: str) -> str:
+            t = str(issuer).strip().upper()
+            if t in _CREDIT_CONSO_ISSUERS: return "credit_conso"
+            if t in _CREDIT_BAIL_ISSUERS:  return "credit_bail"
             return "autres_bsf"
 
         _ORANGE_F    = PatternFill(start_color="C8501E", end_color="C8501E", fill_type="solid")
@@ -1285,11 +1309,13 @@ def _page_spread() -> None:
                 if not df_conso.empty:
                     ws_rc = wb.create_sheet("RECAP_BSF_CONSO")
                     _build_cross_recap(ws_rc, df_conso, "_bank", "CRÉDIT CONSOMMATION")
-                    _write_sheet_tcn(writer, df_conso, "BSF_credit_consommation")
+                    for issuer, df_grp in df_conso.groupby("_bank"):
+                        _write_sheet_tcn(writer, df_grp, f"BSF_CONSO_{issuer}")
                 if not df_bail.empty:
                     ws_rb = wb.create_sheet("RECAP_BSF_BAIL")
                     _build_cross_recap(ws_rb, df_bail, "_bank", "CRÉDIT BAIL")
-                    _write_sheet_tcn(writer, df_bail, "BSF_credit_bail")
+                    for issuer, df_grp in df_bail.groupby("_bank"):
+                        _write_sheet_tcn(writer, df_grp, f"BSF_BAIL_{issuer}")
                 if not df_autres_bsf.empty:
                     _write_sheet_tcn(writer, df_autres_bsf, "BSF_autres")
 
@@ -1341,7 +1367,7 @@ def _page_spread() -> None:
         if _instrid_col:
             _oblig_src_cols.append(_instrid_col)
         _oblig_src_cols.append("ENGPREFERREDNAME")
-        _emetteur_col = next((c for c in ["PREFERREDNAMEREGISTRAR", "PREFERREDNAMEISSUER"] if c in df_oblig.columns), None)
+        _emetteur_col = next((c for c in ["PREFERREDNAMEISSUER", "PREFERREDNAMEREGISTRAR"] if c in df_oblig.columns), None)
         if _emetteur_col:
             _oblig_src_cols.append(_emetteur_col)
         if "SECTEUR" in df_oblig.columns:
