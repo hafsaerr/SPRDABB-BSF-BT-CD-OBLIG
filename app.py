@@ -42,77 +42,59 @@ BANK_ISSUERS = BANQUES_EXCLUES
 # SECTOR MAP (OBLIG_ORDN) — matching on PREFERREDNAMEISSUER exact
 # ─────────────────────────────────────────────────────────────────────────────
 SECTEUR_MAP = {
-    # ENERGIE
-    'ONEE': 'ENERGIE', 'TAQA MOROCCO': 'ENERGIE', 'MASEN': 'ENERGIE',
-    'FEC': 'ENERGIE', 'LYDEC': 'ENERGIE', 'SAMIR': 'ENERGIE',
-    'SEDM': 'ENERGIE', 'TMPA': 'ENERGIE', 'AFRIQUIA GAZ': 'ENERGIE',
-    'AFIQUIA LUB': 'ENERGIE', 'MAGHREB OXYGENE': 'ENERGIE',
-    'PHOSPH BOUCRAA': 'ENERGIE',
-    # BTP
-    'TGCC': 'BTP', 'JET CONTRACTORS': 'BTP', 'ADI': 'BTP',
-    'SETTAVEX': 'BTP', 'CMGP GROUP': 'BTP', 'ASSIFILL BUILD': 'BTP',
-    'BUILDING LOGIST': 'BTP', 'NADOR WEST MED': 'BTP',
-    # CIMENTERIE
-    'HOLCIM MAROC': 'CIMENTERIE', 'CIMAT': 'CIMENTERIE',
-    # IMMOBILIER
-    'CGI': 'IMMOBILIER', 'ALLIANCES DARNA': 'IMMOBILIER',
-    'DOUJA PROM ADD': 'IMMOBILIER', 'AL OMRANE': 'IMMOBILIER',
-    'IMMOLOG': 'IMMOBILIER', 'ARADEI CAPITAL': 'IMMOBILIER',
-    'BEST REAL ESTAT': 'IMMOBILIER', 'HAYAN IMMO SA': 'IMMOBILIER',
-    'PALME DEV': 'IMMOBILIER', 'CMR LSTONE': 'IMMOBILIER',
-    'Immorent SC': 'IMMOBILIER', 'RDS': 'IMMOBILIER',
-    # TRANSPORT
-    'ONCF': 'TRANSPORT', 'ONDA': 'TRANSPORT', 'CTM SA': 'TRANSPORT',
-    'COMANAV': 'TRANSPORT', 'TANGER MED  SA': 'TRANSPORT',
-    'TMSA': 'TRANSPORT', 'ANP': 'TRANSPORT', 'ADM': 'TRANSPORT',
-    'MEDIACO MAROC': 'TRANSPORT', 'CMT': 'TRANSPORT',
-    # TELECOM
-    'MEDI TELCOM SA': 'TELECOM', 'IAM': 'TELECOM',
-    # CHIMIE / MINES
-    'OCP SA': 'CHIMIE / MINES', 'OCP NUTRICROPS': 'CHIMIE / MINES',
-    'MANAGEM': 'CHIMIE / MINES',
-    # AGRO-ALIMENTAIRE
-    'OULMES': 'AGRO-ALIMENTAIRE', 'UNIMER': 'AGRO-ALIMENTAIRE',
-    'AFRICA FEED FOOD': 'AGRO-ALIMENTAIRE',
-    'SOMACOVAM': 'AGRO-ALIMENTAIRE', 'MUTANDIS SCA': 'AGRO-ALIMENTAIRE',
-    'ZALAGH HOLDING': 'AGRO-ALIMENTAIRE',
-    # SIDERURGIE
-    'MAGHREB STEEL': 'SIDERURGIE',
-    # SANTE
+    # Leasing & crédit à la consommation
+    'MA LEASING': 'LEASING & CREDIT CONSO', 'MAGHREBAIL': 'LEASING & CREDIT CONSO',
+    'TASLIF': 'LEASING & CREDIT CONSO', 'WAFASALAF': 'LEASING & CREDIT CONSO',
+    'RCI': 'LEASING & CREDIT CONSO',
+    # Immobilier & promotion immobilière
+    'ADI': 'IMMOBILIER', 'ALLIANCES DARNA': 'IMMOBILIER', 'AL OMRANE': 'IMMOBILIER',
+    'CGI': 'IMMOBILIER', 'DOUJA PROM ADD': 'IMMOBILIER', 'HAYAN IMMO SA': 'IMMOBILIER',
+    'IMMOLOG': 'IMMOBILIER', 'Immorent SC': 'IMMOBILIER', 'MADAEF': 'IMMOBILIER',
+    'PALME DEV': 'IMMOBILIER', 'RISMA SA': 'IMMOBILIER', 'ZALAGH HOLDING': 'IMMOBILIER',
+    'ARADEI CAPITAL': 'IMMOBILIER',
+    # Mines, industrie lourde & chimie
+    'MANAGEM': 'MINES / INDUSTRIE / CHIMIE', 'OCP SA': 'MINES / INDUSTRIE / CHIMIE',
+    'OCP NUTRICROPS': 'MINES / INDUSTRIE / CHIMIE', 'PHOSPH BOUCRAA': 'MINES / INDUSTRIE / CHIMIE',
+    'MAGHREB STEEL': 'MINES / INDUSTRIE / CHIMIE', 'MAGHREB OXYGENE': 'MINES / INDUSTRIE / CHIMIE',
+    'HOLCIM MAROC': 'MINES / INDUSTRIE / CHIMIE', 'CIMAT': 'MINES / INDUSTRIE / CHIMIE',
+    'SAMIR': 'MINES / INDUSTRIE / CHIMIE', 'AFRIQUIA GAZ': 'MINES / INDUSTRIE / CHIMIE',
+    'AFIQUIA LUB': 'MINES / INDUSTRIE / CHIMIE',
+    # Agroalimentaire & boissons
+    'AFRICA FEED FOOD': 'AGRO-ALIMENTAIRE', 'UNIMER': 'AGRO-ALIMENTAIRE',
+    'AGRI CAPITAL': 'AGRO-ALIMENTAIRE', 'OULMES': 'AGRO-ALIMENTAIRE',
+    'MUTANDIS SCA': 'AGRO-ALIMENTAIRE',
+    # Distribution & commerce
+    'LABEL VIE': 'DISTRIBUTION & COMMERCE', 'MARJANE HOLDING': 'DISTRIBUTION & COMMERCE',
+    'RETAIL HOLDING': 'DISTRIBUTION & COMMERCE', 'AUTO NEJMA': 'DISTRIBUTION & COMMERCE',
+    'UNIVERS MOTORS': 'DISTRIBUTION & COMMERCE',
+    # Transport, logistique & ports
+    'CTM SA': 'TRANSPORT / LOGISTIQUE', 'ADM': 'TRANSPORT / LOGISTIQUE',
+    'ONCF': 'TRANSPORT / LOGISTIQUE', 'ONDA': 'TRANSPORT / LOGISTIQUE',
+    'COMANAV': 'TRANSPORT / LOGISTIQUE', 'NADOR WEST MED': 'TRANSPORT / LOGISTIQUE',
+    'TANGER MED  SA': 'TRANSPORT / LOGISTIQUE', 'TMSA': 'TRANSPORT / LOGISTIQUE',
+    'TMPA': 'TRANSPORT / LOGISTIQUE', 'BUILDING LOGIST': 'TRANSPORT / LOGISTIQUE',
+    'SOMACOVAM': 'TRANSPORT / LOGISTIQUE',
+    # Energie & utilities
+    'ONEE': 'ENERGIE', 'MASEN': 'ENERGIE', 'TAQA MOROCCO': 'ENERGIE',
+    'LYDEC': 'ENERGIE', 'RDS': 'ENERGIE',
+    # Telecoms
+    'MEDI TELCOM SA': 'TELECOM',
+    # Sante
     'AKDITAL': 'SANTE',
-    # TOURISME
-    'RISMA SA': 'TOURISME', 'MADAEF': 'TOURISME',
-    # GRANDE DISTRIBUTION
-    'LABEL VIE': 'GRANDE DISTRIBUTION',
-    'MARJANE HOLDING': 'GRANDE DISTRIBUTION',
-    'RETAIL HOLDING': 'GRANDE DISTRIBUTION',
-    # HOLDING
-    'AL MADA': 'HOLDING', 'HOLMARCOM FIN CO': 'HOLDING',
-    'FINANCECOM': 'HOLDING', 'FINANCIER SEC': 'HOLDING',
+    # BTP & construction
+    'TGCC': 'BTP', 'JET CONTRACTORS': 'BTP', 'SETTAVEX': 'BTP',
+    'CMGP GROUP': 'BTP', 'MEDIACO MAROC': 'BTP', 'DISTRA-S.A': 'BTP',
+    # Institutions publiques & collectivites
+    'Region de Casa': 'INSTITUTIONS PUBLIQUES', 'COMMUNE AGADIR': 'INSTITUTIONS PUBLIQUES',
+    'ORMVAD': 'INSTITUTIONS PUBLIQUES', 'Univ Mohammed VI': 'INSTITUTIONS PUBLIQUES',
+    'ANP': 'INSTITUTIONS PUBLIQUES',
+    # Holdings diversifies / autres
+    'AL MADA': 'HOLDING', 'FINANCECOM': 'HOLDING', 'HOLMARCOM FIN CO': 'HOLDING',
     'O CAPITAL GROUP': 'HOLDING', 'GROUP INVEST SA': 'HOLDING',
-    'GARAN': 'HOLDING', 'Hold GENE EDU': 'HOLDING',
-    # LEASING
-    'MAGHREBAIL': 'LEASING', 'MA LEASING': 'LEASING',
-    # CREDIT CONSO
-    'WAFASALAF': 'CREDIT CONSO', 'TASLIF': 'CREDIT CONSO',
-    # ASSURANCE
-    'SAHAM': 'ASSURANCE',
-    # MICROFINANCE
-    'JAIDA': 'MICROFINANCE', 'SFI': 'MICROFINANCE',
-    # PARA-PUBLIC
-    'SCIF': 'PARA-PUBLIC', 'ORMVAD': 'PARA-PUBLIC',
-    'COMMUNE AGADIR': 'PARA-PUBLIC', 'BEST FINANCIERE': 'PARA-PUBLIC',
-    'AGRI CAPITAL': 'PARA-PUBLIC',
-    # AUTOMOBILE
-    'RCI': 'AUTOMOBILE', 'UNIVERS MOTORS': 'AUTOMOBILE',
-    'AUTO NEJMA': 'AUTOMOBILE', 'OD MAROC': 'AUTOMOBILE',
-    # EDUCATION
-    'Univ Mohammed VI': 'EDUCATION',
-    # TEXTILE
-    'DISTRA-S.A': 'TEXTILE', 'MCM': 'TEXTILE',
-    # INDUSTRIE
-    'CMB PLA MAROC': 'INDUSTRIE', 'TC3PC': 'INDUSTRIE',
-    'FINAN HATT': 'INDUSTRIE',
+    'BEST FINANCIERE': 'HOLDING', 'BEST REAL ESTAT': 'HOLDING', 'Hold GENE EDU': 'HOLDING',
+    # Non identifies avec certitude (ALEQ, ASSIFILL BUILD, CMR LSTONE, CMB PLA MAROC,
+    # FINAN HATT, FINANCIER SEC, SCIF, SEDM, TC3PC, OD MAROC) -> non mappes, tombent
+    # automatiquement dans la page "AUTRES" via detect_sector().
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1164,10 +1146,11 @@ def _page_spread() -> None:
         _CREDIT_CONSO_ISSUERS = {
             "SOFAC CREDIT", "SALAFIN", "AXA CREDIT", "WAFASALAF",
             "EQDOM",  # = SEDM, écrit "EQDOM" dans PREFERREDNAMEISSUER
-            "TASLIF", "RCI",
+            "TASLIF", "RCI", "JAIDA",
         }
         _CREDIT_BAIL_ISSUERS = {
-            "MA LEASING", "MAGHREB BAIL", "BMCI LEAS", "SAHAM LEASING", "WAFABAIL",
+            "MA LEASING", "MAGHREBAIL", "MAGHREB BAIL", "BMCI LEAS",
+            "SAHAM LEASING", "WAFABAIL",
         }
 
         def _bsf_group(issuer: str) -> str:
@@ -1350,8 +1333,19 @@ def _page_spread() -> None:
     # ─────────────────────────────────────────────────────────────────────────
     df_oblig = df_work[df_work["Type"] == "OBLIG_ORDN"].copy()
 
+    if "Spread (bps)" in df_oblig.columns:
+        _n_before_oblig = len(df_oblig)
+        df_oblig = df_oblig[
+            df_oblig["Spread (bps)"].isna() | (df_oblig["Spread (bps)"] >= 0)
+        ].copy()
+        _n_neg_removed = _n_before_oblig - len(df_oblig)
+    else:
+        _n_neg_removed = 0
+
     if not df_oblig.empty:
         _sec("📥 Export Excel — Obligations (OBLIG_ORDN)")
+        if _n_neg_removed:
+            st.caption(f"ℹ️ {_n_neg_removed} obligation(s) avec spread négatif exclue(s) de l'export.")
 
         # Colonnes export obligations
         _ISIN_EXACT_O  = {"ISINCODE","ISIN","CODEISIN","ISIN_CODE","INSTRISINOCODE"}
