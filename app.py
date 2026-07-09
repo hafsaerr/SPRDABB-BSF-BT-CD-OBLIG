@@ -1140,21 +1140,23 @@ def _page_spread() -> None:
             _apply_number_formats(ws, n_data)
             _add_summary(ws, df_out, n_data)
 
-        # BSF grouping — match exact PREFERREDNAMEISSUER name (via _bank)
-        _CREDIT_CONSO_ISSUERS = {
+        # BSF grouping — recherche par sous-chaîne dans PREFERREDNAMEISSUER (via _bank).
+        # Certains émetteurs (ex: EQDOM) y figurent sous leur raison sociale complète
+        # plutôt que leur sigle, d'où le "contains" plutôt qu'une égalité stricte.
+        _CREDIT_CONSO_TAGS = {
             "SOFAC CREDIT", "SALAFIN", "AXA CREDIT", "WAFASALAF",
-            "EQDOM",  # = SEDM, écrit "EQDOM" dans PREFERREDNAMEISSUER
+            "EQDOM", "EQUIPEMENT DOMESTIQUE",  # = SEDM
             "TASLIF", "RCI", "JAIDA",
         }
-        _CREDIT_BAIL_ISSUERS = {
+        _CREDIT_BAIL_TAGS = {
             "MA LEASING", "MAGHREBAIL", "MAGHREB BAIL", "BMCI LEAS",
             "SAHAM LEASING", "WAFABAIL",
         }
 
         def _bsf_group(issuer: str) -> str:
             t = str(issuer).strip().upper()
-            if t in _CREDIT_CONSO_ISSUERS: return "credit_conso"
-            if t in _CREDIT_BAIL_ISSUERS:  return "credit_bail"
+            if any(tag in t for tag in _CREDIT_CONSO_TAGS): return "credit_conso"
+            if any(tag in t for tag in _CREDIT_BAIL_TAGS):  return "credit_bail"
             return "autres_bsf"
 
         _ORANGE_F    = PatternFill(start_color="C8501E", end_color="C8501E", fill_type="solid")
