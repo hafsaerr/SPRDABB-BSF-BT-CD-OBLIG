@@ -965,27 +965,25 @@ def _page_spread() -> None:
             raw = parts[1].upper() if len(parts) >= 2 else "AUTRE"
             return _normalize_bank(raw)
 
-        def _mat_label_from_name(details) -> str:
-            s = "" if details is None else str(details).strip().lower()
-            if not s:
+        def _mat_label_from_dates(issue_dt, maturity_dt) -> str:
+            """Bucket de maturité calculé depuis DATE D'EMISSION / DATE D'ECHEANCE.
+            Évite le parsing de texte (source des 'inconnue' et des doublons
+            '2 ans' / '02 ans' selon la façon dont le nom du titre est écrit)."""
+            if pd.isna(issue_dt) or pd.isna(maturity_dt):
                 return "inconnue"
-            s = _re.sub(r"\bsem\.\b", "sem", s)
-            matches = _re.findall(
-                r"(\d+)\s*(semaines?|semaine|sem|s|mois|ans?|an|jours?|jrs?|jr|j)\b", s
-            )
-            if not matches:
+            days = (pd.Timestamp(maturity_dt) - pd.Timestamp(issue_dt)).days
+            if days <= 0:
                 return "inconnue"
-            num, unit = matches[-1]
-            unit = unit.lower()
-            if unit in {"s", "sem"} or unit.startswith("semaine"):
-                unit_norm = "semaine" if num == "1" else "semaines"
-            elif unit in {"j", "jr", "jrs"} or unit.startswith("jour"):
-                unit_norm = "jour" if num == "1" else "jours"
-            elif unit.startswith("mois"):
-                unit_norm = "mois"
-            else:
-                unit_norm = "an" if num == "1" else "ans"
-            return f"{num} {unit_norm}"
+            if days < 7:
+                return "1 jour" if days == 1 else f"{days} jours"
+            if days < 30:
+                n = max(1, round(days / 7))
+                return "1 semaine" if n == 1 else f"{n} semaines"
+            if days < 365:
+                n = max(1, round(days / 30))
+                return f"{n} mois"
+            n = max(1, round(days / 365))
+            return "1 an" if n == 1 else f"{n} ans"
 
         def _mat_sort_key(label: str):
             m = _re.match(r"^\s*(\d+)\s*(jour|jours|semaine|semaines|mois|an|ans)\s*$",
@@ -1097,7 +1095,7 @@ def _page_spread() -> None:
 
             buckets: dict[str, list[float]] = {}
             for _, row in df_s.iterrows():
-                lbl = _mat_label_from_name(row.get("DETAILS DU TITRE", ""))
+                lbl = _mat_label_from_dates(row.get("DATE D'EMISSION"), row.get("DATE D'ECHEANCE"))
                 if lbl == "inconnue":
                     continue
                 try:
@@ -1264,7 +1262,9 @@ def _page_spread() -> None:
 
         # Add _mat column
         df_xls_filt = df_xls_filt.copy()
-        df_xls_filt["_mat"] = df_xls_filt["ENGLONGNAME"].fillna("").apply(_mat_label_from_name)
+        df_xls_filt["_mat"] = df_xls_filt.apply(
+            lambda r: _mat_label_from_dates(r.get("ISSUEDT"), r.get("MATURITYDT_L")), axis=1
+        )
 
         # Split by Type
         df_cd    = df_xls_filt[df_xls_filt["Type"] == "CD"].copy()
