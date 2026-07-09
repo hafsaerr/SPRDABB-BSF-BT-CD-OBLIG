@@ -1136,7 +1136,8 @@ def _page_spread() -> None:
 
         def _write_sheet_tcn(writer, df_s: pd.DataFrame, sheet_name: str) -> None:
             sn     = _safe_sheet_name(writer, sheet_name)
-            df_out = df_s[_exp_cols].rename(columns=_col_labels).reset_index(drop=True)
+            cols   = [c for c in _exp_cols if c in df_s.columns]
+            df_out = df_s[cols].rename(columns=_col_labels).reset_index(drop=True)
             df_out.to_excel(writer, sheet_name=sn, index=False)
             ws     = writer.sheets[sn]
             n_data = len(df_out)
@@ -1362,7 +1363,7 @@ def _page_spread() -> None:
     if "Spread (bps)" in df_oblig.columns:
         _n_before_oblig = len(df_oblig)
         df_oblig = df_oblig[
-            df_oblig["Spread (bps)"].isna() | (df_oblig["Spread (bps)"] >= 0)
+            df_oblig["Spread (bps)"].isna() | (df_oblig["Spread (bps)"] > 0)
         ].copy()
         _n_neg_removed = _n_before_oblig - len(df_oblig)
     else:
@@ -1460,7 +1461,8 @@ def _page_spread() -> None:
 
         def _write_oblig_sheet(writer, df_s: pd.DataFrame, sheet_name: str) -> None:
             sn = _sheet_name_oblig(sheet_name)
-            df_out = df_s[_oblig_src_cols].rename(columns=_oblig_rename).reset_index(drop=True)
+            cols = [c for c in _oblig_src_cols if c in df_s.columns]
+            df_out = df_s[cols].rename(columns=_oblig_rename).reset_index(drop=True)
             # Trier par SPREAD_BPS décroissant si disponible
             if "SPREAD_BPS" in df_out.columns:
                 df_out = df_out.sort_values("SPREAD_BPS", ascending=False)
