@@ -1153,10 +1153,16 @@ def _page_spread() -> None:
             "SAHAM LEASING", "WAFABAIL",
         }
 
-        def _bsf_group(issuer: str) -> str:
+        def _bsf_group(issuer: str, englongname: str = "") -> str:
             t = str(issuer).strip().upper()
             if any(tag in t for tag in _CREDIT_CONSO_TAGS): return "credit_conso"
             if any(tag in t for tag in _CREDIT_BAIL_TAGS):  return "credit_bail"
+            # PREFERREDNAMEISSUER n'identifie pas toujours l'émetteur (ex: EQDOM peut
+            # apparaître sous sa raison sociale complète "SOCIETE D EQUIPEMENT
+            # DOMESTIQUE...") — on retombe sur ENGLONGNAME (ex: "BSF EQDOM ...").
+            name = str(englongname).strip().upper()
+            if any(tag in name for tag in _CREDIT_CONSO_TAGS): return "credit_conso"
+            if any(tag in name for tag in _CREDIT_BAIL_TAGS):  return "credit_bail"
             return "autres_bsf"
 
         _ORANGE_F    = PatternFill(start_color="C8501E", end_color="C8501E", fill_type="solid")
@@ -1287,19 +1293,33 @@ def _page_spread() -> None:
 
             # BSF: split into conso / bail / autres
             if not df_bsf.empty:
-                df_bsf["_bsf_grp"] = df_bsf["_bank"].apply(_bsf_group)
+                df_bsf["_bsf_grp"] = df_bsf.apply(
+                    lambda r: _bsf_group(r["_bank"], r.get("ENGLONGNAME", "")), axis=1
+                )
+                # Nom d'affichage canonique (ex: "EQUIPEMENT DOMESTIQUE" -> "EQDOM"),
+                # sinon on garde PREFERREDNAMEISSUER (_bank).
+                _BSF_CANONICAL_NAME = {"EQUIPEMENT DOMESTIQUE": "EQDOM", "MAGHREB BAIL": "MAGHREBAIL"}
+
+                def _bsf_display_name(row) -> str:
+                    t    = str(row["_bank"]).strip().upper()
+                    name = str(row.get("ENGLONGNAME", "")).strip().upper()
+                    for tag in sorted(_CREDIT_CONSO_TAGS | _CREDIT_BAIL_TAGS, key=len, reverse=True):
+                        if tag in t or tag in name:
+                            return _BSF_CANONICAL_NAME.get(tag, tag)
+                    return row["_bank"]
+                df_bsf["_bsf_name"] = df_bsf.apply(_bsf_display_name, axis=1)
                 df_conso      = df_bsf[df_bsf["_bsf_grp"] == "credit_conso"].copy()
                 df_bail       = df_bsf[df_bsf["_bsf_grp"] == "credit_bail"].copy()
                 df_autres_bsf = df_bsf[df_bsf["_bsf_grp"] == "autres_bsf"].copy()
                 if not df_conso.empty:
                     ws_rc = wb.create_sheet("RECAP_BSF_CONSO")
-                    _build_cross_recap(ws_rc, df_conso, "_bank", "CRÉDIT CONSOMMATION")
-                    for issuer, df_grp in df_conso.groupby("_bank"):
+                    _build_cross_recap(ws_rc, df_conso, "_bsf_name", "CRÉDIT CONSOMMATION")
+                    for issuer, df_grp in df_conso.groupby("_bsf_name"):
                         _write_sheet_tcn(writer, df_grp, f"BSF_CONSO_{issuer}")
                 if not df_bail.empty:
                     ws_rb = wb.create_sheet("RECAP_BSF_BAIL")
-                    _build_cross_recap(ws_rb, df_bail, "_bank", "CRÉDIT BAIL")
-                    for issuer, df_grp in df_bail.groupby("_bank"):
+                    _build_cross_recap(ws_rb, df_bail, "_bsf_name", "CRÉDIT BAIL")
+                    for issuer, df_grp in df_bail.groupby("_bsf_name"):
                         _write_sheet_tcn(writer, df_grp, f"BSF_BAIL_{issuer}")
                 if not df_autres_bsf.empty:
                     _write_sheet_tcn(writer, df_autres_bsf, "BSF_autres")
