@@ -51,8 +51,12 @@ BASE_URL_FR = (
     "Marche-des-bons-de-tresor/Marche-secondaire/Taux-de-reference-des-bons-du-tresor"
 )
 BLOCK_ID = "e1d6b9bbf87f86f8ba53e8518e882982"
-DIRECT_CSV_URL = f"https://www.bkam.ma/export/blockcsv/{BLOCK_ID}"
-DIRECT_CSV_URL_FR = f"https://www.bkam.ma/fr/export/blockcsv/{BLOCK_ID}"
+# L'export CSV bkam.ma exige ce préfixe d'ID de bloc eZ Publish avant le BLOCK_ID
+# (sans lui, l'URL renvoie 200 avec un corps vide). S'il change un jour côté
+# BAM, le fallback HTML (_extract_csv_links) redécouvre le bon lien.
+_CSV_PATH_PREFIX = "2340/c3367fcefc5f524397748201aee5dab8"
+DIRECT_CSV_URL = f"https://www.bkam.ma/export/blockcsv/{_CSV_PATH_PREFIX}/{BLOCK_ID}"
+DIRECT_CSV_URL_FR = f"https://www.bkam.ma/fr/export/blockcsv/{_CSV_PATH_PREFIX}/{BLOCK_ID}"
 
 RETRYABLE_STATUSES = {429, 500, 502, 503, 504}
 RETRY_BACKOFF = (0.5, 1.0, 2.0)
@@ -167,7 +171,10 @@ def _looks_like_csv(text: str) -> bool:
 
 def _direct_csv_urls_for_date(d: date) -> list[str]:
     q = quote(d.strftime("%d/%m/%Y"))
-    return [f"{DIRECT_CSV_URL}?date={q}", f"{DIRECT_CSV_URL_FR}?date={q}"]
+    return [
+        f"{DIRECT_CSV_URL}?date={q}&block={BLOCK_ID}",
+        f"{DIRECT_CSV_URL_FR}?date={q}&block={BLOCK_ID}",
+    ]
 
 
 class BamCurveFetcher:
