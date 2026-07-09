@@ -371,7 +371,7 @@ def _sec(title: str) -> None:
     st.markdown(f"<div class='section-hdr'>{title}</div>", unsafe_allow_html=True)
 
 def _to_decimal(val) -> Optional[float]:
-    if val is None:
+    if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
     if isinstance(val, str):
         val = val.strip().replace("%","").replace(",",".").replace(" ","")
@@ -746,6 +746,10 @@ def _page_spread() -> None:
     )
     if _dup_col:
         _n_before = len(df_work)
+        if rate_col and rate_col in df_work.columns:
+            # Parmi des doublons (même INSTRID), garder en priorité la ligne où
+            # le taux instrument est renseigné plutôt que la première rencontrée.
+            df_work = df_work.sort_values(by=rate_col, key=lambda s: s.isna(), kind="stable")
         df_work = df_work.drop_duplicates(subset=[_dup_col], keep="first")
         _n_after = len(df_work)
         if _n_before > _n_after:
