@@ -220,8 +220,9 @@ class BamCurveFetcher:
         if not txt:
             raise FileNotFoundError(f"No BAM curve CSV for date {d.isoformat()}")
 
+        curve = self._parse_curve(txt, d)  # valide avant de persister au cache
         self._cache_path(d).write_text(txt, encoding="utf-8")
-        return self._parse_curve(txt, d)
+        return curve
 
     def get_curves_parallel(
         self,
@@ -512,16 +513,30 @@ class BamCurveFetcher:
             raise ValueError("CSV BAM: colonnes echeance/taux introuvables")
 
         rows = []
+        val_dates_seen: set[date] = set()
         for _, row in df.iterrows():
             d_ech = _parse_date(row.get(col_echeance))
             d_val = _parse_date(row.get(col_valeur)) if col_valeur else curve_date
             t = _parse_rate(row.get(col_taux))
             if d_ech is None or d_val is None or t is None:
                 continue
+            val_dates_seen.add(d_val)
             mt = (d_ech - d_val).days
             if mt <= 0:
                 continue
             rows.append((mt, t))
+
+        # Garde-fou : si bkam.ma ne reconnaît pas la date demandée, il peut renvoyer
+        # la courbe "par défaut" de la page (souvent la plus récente) au lieu d'une
+        # erreur. Sans cette vérification, on cacherait silencieusement la courbe
+        # d'une toute autre date sous le nom de fichier de la date demandée.
+        if val_dates_seen:
+            closest = min(val_dates_seen, key=lambda d: abs((d - curve_date).days))
+            if abs((closest - curve_date).days) > 10:
+                raise ValueError(
+                    f"CSV BAM: date de la valeur ({closest}) trop éloignée "
+                    f"de la date demandée ({curve_date})"
+                )
 
         if not rows:
             raise ValueError("CSV BAM: aucune donnee exploitable")
