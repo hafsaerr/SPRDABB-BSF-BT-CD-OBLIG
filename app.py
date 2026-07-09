@@ -51,14 +51,13 @@ SECTEUR_MAP = {
     'CGI': 'IMMOBILIER', 'DOUJA PROM ADD': 'IMMOBILIER', 'HAYAN IMMO SA': 'IMMOBILIER',
     'IMMOLOG': 'IMMOBILIER', 'Immorent SC': 'IMMOBILIER', 'MADAEF': 'IMMOBILIER',
     'PALME DEV': 'IMMOBILIER', 'RISMA SA': 'IMMOBILIER', 'ZALAGH HOLDING': 'IMMOBILIER',
-    'ARADEI CAPITAL': 'IMMOBILIER',
+    'ARADEI CAPITAL': 'IMMOBILIER', 'RDS': 'IMMOBILIER',
     # Mines, industrie lourde & chimie
     'MANAGEM': 'MINES / INDUSTRIE / CHIMIE', 'OCP SA': 'MINES / INDUSTRIE / CHIMIE',
     'OCP NUTRICROPS': 'MINES / INDUSTRIE / CHIMIE', 'PHOSPH BOUCRAA': 'MINES / INDUSTRIE / CHIMIE',
     'MAGHREB STEEL': 'MINES / INDUSTRIE / CHIMIE', 'MAGHREB OXYGENE': 'MINES / INDUSTRIE / CHIMIE',
     'HOLCIM MAROC': 'MINES / INDUSTRIE / CHIMIE', 'CIMAT': 'MINES / INDUSTRIE / CHIMIE',
-    'SAMIR': 'MINES / INDUSTRIE / CHIMIE', 'AFRIQUIA GAZ': 'MINES / INDUSTRIE / CHIMIE',
-    'AFIQUIA LUB': 'MINES / INDUSTRIE / CHIMIE',
+    'SAMIR': 'MINES / INDUSTRIE / CHIMIE', 'AFIQUIA LUB': 'MINES / INDUSTRIE / CHIMIE',
     # Agroalimentaire & boissons
     'AFRICA FEED FOOD': 'AGRO-ALIMENTAIRE', 'UNIMER': 'AGRO-ALIMENTAIRE',
     'AGRI CAPITAL': 'AGRO-ALIMENTAIRE', 'OULMES': 'AGRO-ALIMENTAIRE',
@@ -76,7 +75,7 @@ SECTEUR_MAP = {
     'SOMACOVAM': 'TRANSPORT / LOGISTIQUE',
     # Energie & utilities
     'ONEE': 'ENERGIE', 'MASEN': 'ENERGIE', 'TAQA MOROCCO': 'ENERGIE',
-    'LYDEC': 'ENERGIE', 'RDS': 'ENERGIE',
+    'LYDEC': 'ENERGIE', 'AFRIQUIA GAZ': 'ENERGIE',
     # Telecoms
     'MEDI TELCOM SA': 'TELECOM',
     # Sante
@@ -821,19 +820,22 @@ def _page_spread() -> None:
     for _, row in df_work.iterrows():
         idt = row["ISSUEDT"]
         mdt = row["MATURITYDT_L"]
+        # Le taux propre de l'instrument ne dépend pas de la courbe BDT — il doit
+        # rester renseigné même si le Taux BDT/Spread ne peuvent pas être calculés.
+        ir = _to_decimal(row.get(rate_col)) if rate_col else None
 
         if pd.isna(idt) or pd.isna(mdt):
-            bdt_rates.append(None); instr_rates.append(None); spreads_bps.append(None)
+            bdt_rates.append(None); instr_rates.append(ir); spreads_bps.append(None)
             continue
 
         mat_days = int((mdt - idt).days)
         if mat_days <= 0:
-            bdt_rates.append(None); instr_rates.append(None); spreads_bps.append(None)
+            bdt_rates.append(None); instr_rates.append(ir); spreads_bps.append(None)
             continue
 
         curve = curves.get(idt.date())
         if not curve:
-            bdt_rates.append(None); instr_rates.append(None); spreads_bps.append(None)
+            bdt_rates.append(None); instr_rates.append(ir); spreads_bps.append(None)
             continue
 
         mt, tx = curve
@@ -841,10 +843,9 @@ def _page_spread() -> None:
             bdt = calcul_taux(mat_days, mt, tx, idt.date())
             bdt_rates.append(bdt)
         except Exception:
-            bdt_rates.append(None); instr_rates.append(None); spreads_bps.append(None)
+            bdt_rates.append(None); instr_rates.append(ir); spreads_bps.append(None)
             continue
 
-        ir     = _to_decimal(row.get(rate_col)) if rate_col else None
         spread = (ir - bdt) * 10_000 if (ir is not None and bdt is not None) else None
         instr_rates.append(ir)
         spreads_bps.append(spread)
