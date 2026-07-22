@@ -3,15 +3,19 @@ from __future__ import annotations
 import base64
 import io
 import logging
+import math
+import re
 from datetime import date, timedelta
 from pathlib import Path
 from statistics import median
 from typing import Optional
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from bam_curve_fetcher import BamCurveFetcher
+from historical_data import get_historical_spreads
 from vba_equivalent_rates import calcul_taux
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -337,7 +341,7 @@ def _render_sidebar() -> str:
         """, unsafe_allow_html=True)
 
         current = st.session_state.get("_nav", "Accueil")
-        for item in ["Accueil", "Calculateur de Spread"]:
+        for item in ["Accueil", "Calculateur de Spread", "Risque de Crédit", "Historique des Spreads"]:
             css = "nav-btn-active" if item == current else "nav-btn"
             st.markdown(f'<div class="{css}">', unsafe_allow_html=True)
             if st.button(item, key=f"nav_{item}", use_container_width=True):
@@ -404,6 +408,49 @@ def _detect_type(row: pd.Series) -> str:
 
 def _detect_sector(issuer: str) -> str:
     return SECTEUR_MAP.get(str(issuer).strip(), "AUTRES")
+
+def _mat_label_from_dates(issue_dt, maturity_dt) -> str:
+    """Bucket de maturité calculé depuis DATE D'EMISSION / DATE D'ECHEANCE.
+    Évite le parsing de texte (source des 'inconnue' et des doublons
+    '2 ans' / '02 ans' selon la façon dont le nom du titre est écrit)."""
+    if pd.isna(issue_dt) or pd.isna(maturity_dt):
+        return "inconnue"
+    days = (pd.Timestamp(maturity_dt) - pd.Timestamp(issue_dt)).days
+    if days <= 0:
+        return "inconnue"
+    if days < 7:
+        return "1 jour" if days == 1 else f"{days} jours"
+    if days < 30:
+        n = max(1, round(days / 7))
+        return "1 semaine" if n == 1 else f"{n} semaines"
+    if days < 365:
+        n = max(1, round(days / 30))
+        return f"{n} mois"
+    n = max(1, round(days / 365))
+    return "1 an" if n == 1 else f"{n} ans"
+
+def _mat_sort_key(label: str):
+    m = re.match(r"^\s*(\d+)\s*(jour|jours|semaine|semaines|mois|an|ans)\s*$",
+                 str(label).lower())
+    if not m:
+        return (99, 10**9)
+    n = int(m.group(1)); u = m.group(2)
+    if u.startswith("jour"):     return (0, n)
+    if u.startswith("semaine"):  return (1, n)
+    if u.startswith("mois"):     return (2, n)
+    return (3, n)
+
+def _mat_label_to_years(label: str) -> float:
+    """Convertit un label de maturité (ex: '3 mois', '2 ans') en années décimales."""
+    m = re.match(r"^\s*(\d+)\s*(jour|jours|semaine|semaines|mois|an|ans)\s*$",
+                 str(label).lower())
+    if not m:
+        return 0.0
+    n = int(m.group(1)); u = m.group(2)
+    if u.startswith("jour"):    return n / 365.0
+    if u.startswith("semaine"): return n * 7 / 365.0
+    if u.startswith("mois"):    return n / 12.0
+    return float(n)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE ACCUEIL
@@ -517,6 +564,264 @@ def _page_home() -> None:
 
     st.info("**Connexion internet requise** pour récupérer les courbes BDT. "
             "Les courbes déjà téléchargées sont réutilisées automatiquement (cache local).")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE RISQUE DE CRÉDIT
+# ─────────────────────────────────────────────────────────────────────────────
+def _page_risque_credit() -> None:
+    st.markdown(f"""
+    <div style="background:linear-gradient(90deg,#1E0A03 0%,#130602 100%);
+                border:1px solid rgba(200,80,30,0.4);border-radius:14px;
+                padding:18px 26px;margin-bottom:20px;
+                display:flex;align-items:center;gap:18px;">
+        {_logo_img(52)}
+        <div>
+            <div style="font-size:1.3rem;font-weight:900;color:#FFFFFF;">Risque de Crédit</div>
+            <div style="font-size:0.85rem;color:#F5C518;">
+                Probabilité de défaut implicite, heatmap et courbes de spread par émetteur</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    df_hist = get_historical_spreads()
+    if df_hist.empty:
+        st.warning(
+            "Aucune donnée historique trouvée dans **historique_spreads/**. "
+            "Déposez-y les fichiers Excel d'export CD/BSF/BT pour alimenter cette page."
+        )
+        return
+
+    types_dispo = sorted(df_hist["Type"].unique())
+    asset_type = st.selectbox("Type d'actif", types_dispo)
+    df_type = df_hist[df_hist["Type"] == asset_type].copy()
+
+    # Bucket de maturité recalculé depuis les dates (cohérent avec l'export).
+    df_type["_mat"] = df_type.apply(
+        lambda r: _mat_label_from_dates(r["DATE D'EMISSION"], r["DATE D'ECHEANCE"]), axis=1
+    )
+    df_type = df_type[df_type["_mat"] != "inconnue"]
+    maturites_dispo = sorted(df_type["_mat"].unique(), key=_mat_sort_key)
+
+    if not maturites_dispo:
+        st.warning("Aucune maturité exploitable pour ce type d'actif.")
+        return
+
+    c1, c2 = st.columns(2)
+    with c1:
+        maturite_pd = st.selectbox("Maturité (pour la probabilité de défaut)", maturites_dispo)
+    with c2:
+        taux_recouvrement = st.number_input(
+            "Taux de recouvrement", value=0.65, min_value=0.0, max_value=0.99,
+            step=0.05, format="%.2f",
+        )
+    lgd = 1 - taux_recouvrement
+
+    # ── Bloc 1 : PD implicite par émetteur ──────────────────────────────────
+    _sec("📊 Probabilité de défaut implicite par émetteur")
+    T = _mat_label_to_years(maturite_pd)
+    df_mat = df_type[df_type["_mat"] == maturite_pd]
+
+    pd_rows = []
+    for emetteur, grp in df_mat.groupby("Emetteur"):
+        spreads = grp["Spread"].dropna()
+        if spreads.empty or lgd <= 0 or T <= 0:
+            continue
+        spread_moyen_bps = spreads.mean()
+        lam = (spread_moyen_bps / 10_000) / lgd
+        pd_t = 1 - math.exp(-lam * T)
+        pd_rows.append({"Emetteur": emetteur, "PD": pd_t, "Spread moyen (bps)": spread_moyen_bps})
+
+    if not pd_rows:
+        st.info("Pas de données exploitables pour cette maturité.")
+    else:
+        df_pd = pd.DataFrame(pd_rows).sort_values("PD", ascending=False)
+        fig_pd = go.Figure(go.Bar(
+            x=df_pd["Emetteur"],
+            y=df_pd["PD"] * 100,
+            marker=dict(
+                color=df_pd["PD"],
+                colorscale=[[0, "#2ECC71"], [0.5, "#F5C518"], [1, "#E74C3C"]],
+                cmin=0, cmax=df_pd["PD"].max() if df_pd["PD"].max() > 0 else 1,
+            ),
+            text=[f"{v:.1f}%" for v in df_pd["PD"] * 100],
+            textposition="outside",
+        ))
+        fig_pd.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            yaxis_title="PD (%)",
+            xaxis_title="Émetteur",
+            margin=dict(t=20, b=10),
+            height=420,
+        )
+        st.plotly_chart(fig_pd, use_container_width=True)
+
+    # ── Bloc 2 : Heatmap Émetteur × Maturité ────────────────────────────────
+    _sec("🗺️ Heatmap du spread moyen — Émetteur × Maturité")
+    pivot = df_type.pivot_table(index="Emetteur", columns="_mat", values="Spread", aggfunc="mean")
+    pivot = pivot.reindex(columns=[m for m in maturites_dispo if m in pivot.columns])
+    pivot = pivot.sort_index()
+
+    if pivot.empty:
+        st.info("Pas assez de données pour la heatmap.")
+    else:
+        z = pivot.values
+        text = [[("-" if pd.isna(v) else f"{v:.0f}") for v in row] for row in z]
+        fig_hm = go.Figure(data=go.Heatmap(
+            z=z,
+            x=list(pivot.columns),
+            y=list(pivot.index),
+            colorscale="RdYlGn_r",
+            text=text,
+            texttemplate="%{text}",
+            hoverongaps=False,
+            colorbar=dict(title="bps"),
+        ))
+        fig_hm.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=20, b=10),
+            height=max(320, 40 * len(pivot.index)),
+        )
+        st.plotly_chart(fig_hm, use_container_width=True)
+
+    # ── Bloc 3 : Courbes de spread superposées par émetteur ─────────────────
+    _sec("📈 Courbes de spread par émetteur")
+    fig_curves = go.Figure()
+    for emetteur in sorted(df_type["Emetteur"].unique()):
+        sub = df_type[df_type["Emetteur"] == emetteur]
+        agg = sub.groupby("_mat")["Spread"].mean().reindex(maturites_dispo)
+        fig_curves.add_trace(go.Scatter(
+            x=maturites_dispo,
+            y=agg.values,
+            mode="lines+markers",
+            name=emetteur,
+            connectgaps=False,
+        ))
+    fig_curves.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis_title="Maturité",
+        yaxis_title="Spread moyen (bps)",
+        margin=dict(t=20, b=10),
+        height=460,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02),
+    )
+    st.plotly_chart(fig_curves, use_container_width=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE HISTORIQUE DES SPREADS
+# ─────────────────────────────────────────────────────────────────────────────
+def _page_historique() -> None:
+    st.markdown(f"""
+    <div style="background:linear-gradient(90deg,#1E0A03 0%,#130602 100%);
+                border:1px solid rgba(200,80,30,0.4);border-radius:14px;
+                padding:18px 26px;margin-bottom:20px;
+                display:flex;align-items:center;gap:18px;">
+        {_logo_img(52)}
+        <div>
+            <div style="font-size:1.3rem;font-weight:900;color:#FFFFFF;">Historique des Spreads</div>
+            <div style="font-size:0.85rem;color:#F5C518;">
+                Consultation brute de la data historique par émetteur</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    df_hist = get_historical_spreads()
+    if df_hist.empty:
+        st.warning(
+            "Aucune donnée historique trouvée dans **historique_spreads/**. "
+            "Déposez-y les fichiers Excel d'export CD/BSF/BT pour alimenter cette page."
+        )
+        return
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        types_dispo = sorted(df_hist["Type"].unique())
+        asset_type = st.selectbox("Type d'actif", types_dispo, key="hist_type")
+    df_type = df_hist[df_hist["Type"] == asset_type]
+
+    with c2:
+        emetteurs_dispo = sorted(df_type["Emetteur"].unique())
+        emetteur = st.selectbox("Émetteur", emetteurs_dispo, key="hist_emetteur")
+    df_em = df_type[df_type["Emetteur"] == emetteur].copy()
+
+    with c3:
+        date_min = df_em["DATE D'EMISSION"].min().date()
+        date_max = df_em["DATE D'EMISSION"].max().date()
+        date_range = st.date_input(
+            "Date d'émission (du / au)",
+            value=(date_min, date_max),
+            min_value=date_min, max_value=date_max,
+            key="hist_dates",
+        )
+
+    df_em["_mat"] = df_em.apply(
+        lambda r: _mat_label_from_dates(r["DATE D'EMISSION"], r["DATE D'ECHEANCE"]), axis=1
+    )
+    with c4:
+        maturites_dispo = sorted(
+            (m for m in df_em["_mat"].unique() if m != "inconnue"), key=_mat_sort_key
+        )
+        maturite_sel = st.selectbox("Maturité", ["Toutes"] + maturites_dispo, key="hist_mat")
+
+    # ── Application des filtres ──────────────────────────────────────────────
+    df_result = df_em.copy()
+    if isinstance(date_range, tuple) and len(date_range) == 2:
+        d_start, d_end = date_range
+        mask_date = (
+            (df_result["DATE D'EMISSION"].dt.date >= d_start)
+            & (df_result["DATE D'EMISSION"].dt.date <= d_end)
+        )
+        df_result = df_result[mask_date]
+    if maturite_sel != "Toutes":
+        df_result = df_result[df_result["_mat"] == maturite_sel]
+
+    df_result = df_result.sort_values("DATE D'EMISSION", ascending=False)
+
+    _sec("📋 Résultats")
+    disp_cols = [c for c in
+                 ["CODE", "DETAILS DU TITRE", "DATE D'EMISSION", "DATE D'ECHEANCE",
+                  "Maturite residuelle", "TAUX BDT", "Spread", "TAUX D'INTERET"]
+                 if c in df_result.columns]
+
+    fmt: dict = {}
+    if "TAUX BDT" in disp_cols:              fmt["TAUX BDT"] = "{:.4%}"
+    if "Spread" in disp_cols:                fmt["Spread"] = "{:.1f}"
+    if "Maturite residuelle" in disp_cols:   fmt["Maturite residuelle"] = "{:.2f}"
+    if "TAUX D'INTERET" in disp_cols:        fmt["TAUX D'INTERET"] = "{:.2f}"
+
+    st.dataframe(
+        df_result[disp_cols].reset_index(drop=True).style.format(fmt),
+        use_container_width=True,
+        height=420,
+    )
+
+    # ── Résumé ────────────────────────────────────────────────────────────────
+    n = len(df_result)
+    spreads = df_result["Spread"].dropna() if "Spread" in df_result.columns else pd.Series(dtype=float)
+    if spreads.empty:
+        st.caption(f"**{n}** titre(s) trouvé(s).")
+    else:
+        st.caption(
+            f"**{n}** titre(s) trouvé(s) — "
+            f"Spread moyen : **{spreads.mean():.1f} bps** | "
+            f"min : **{spreads.min():.1f} bps** | "
+            f"max : **{spreads.max():.1f} bps**"
+        )
+
+    csv_bytes = df_result[disp_cols].to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        "⬇️ Exporter en CSV",
+        data=csv_bytes,
+        file_name=f"historique_{asset_type}_{emetteur}.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE CALCULATEUR
@@ -969,37 +1274,6 @@ def _page_spread() -> None:
             parts = str(name).strip().split()
             raw = parts[1].upper() if len(parts) >= 2 else "AUTRE"
             return _normalize_bank(raw)
-
-        def _mat_label_from_dates(issue_dt, maturity_dt) -> str:
-            """Bucket de maturité calculé depuis DATE D'EMISSION / DATE D'ECHEANCE.
-            Évite le parsing de texte (source des 'inconnue' et des doublons
-            '2 ans' / '02 ans' selon la façon dont le nom du titre est écrit)."""
-            if pd.isna(issue_dt) or pd.isna(maturity_dt):
-                return "inconnue"
-            days = (pd.Timestamp(maturity_dt) - pd.Timestamp(issue_dt)).days
-            if days <= 0:
-                return "inconnue"
-            if days < 7:
-                return "1 jour" if days == 1 else f"{days} jours"
-            if days < 30:
-                n = max(1, round(days / 7))
-                return "1 semaine" if n == 1 else f"{n} semaines"
-            if days < 365:
-                n = max(1, round(days / 30))
-                return f"{n} mois"
-            n = max(1, round(days / 365))
-            return "1 an" if n == 1 else f"{n} ans"
-
-        def _mat_sort_key(label: str):
-            m = _re.match(r"^\s*(\d+)\s*(jour|jours|semaine|semaines|mois|an|ans)\s*$",
-                          str(label).lower())
-            if not m:
-                return (99, 10**9)
-            n = int(m.group(1)); u = m.group(2)
-            if u.startswith("jour"):     return (0, n)
-            if u.startswith("semaine"):  return (1, n)
-            if u.startswith("mois"):     return (2, n)
-            return (3, n)
 
         df_xls = df_tcn_bt.copy()
         df_xls["_bank"] = (
@@ -1654,6 +1928,10 @@ def main() -> None:
 
     if page == "Accueil":
         _page_home()
+    elif page == "Risque de Crédit":
+        _page_risque_credit()
+    elif page == "Historique des Spreads":
+        _page_historique()
     else:
         _page_spread()
 
