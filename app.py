@@ -647,6 +647,7 @@ def _page_risque_credit() -> None:
         fig_pd = go.Figure(go.Bar(
             x=df_pd["Emetteur"],
             y=df_pd["PD"] * 100,
+            width=0.4,
             marker=dict(
                 color=df_pd["PD"],
                 colorscale=[[0, "#2ECC71"], [0.5, "#F5C518"], [1, "#E74C3C"]],
@@ -712,6 +713,7 @@ def _page_risque_credit() -> None:
             x=secteur_grp.index, y=poids_pct,
             name="Poids (% des titres)",
             marker_color="#C0501A",
+            width=0.4,
             yaxis="y1",
         ))
         fig_secteur.add_trace(go.Scatter(
@@ -746,6 +748,7 @@ def _page_risque_credit() -> None:
         x=maturites_dispo, y=mat_grp["bdt_moyen"] * 100,
         name="Taux BDT interpolé (%)",
         marker_color="#5B8DB8",
+        width=0.4,
         yaxis="y1",
     ))
     fig_bdt.add_trace(go.Scatter(
@@ -769,9 +772,9 @@ def _page_risque_credit() -> None:
     )
     st.plotly_chart(fig_bdt, use_container_width=True)
 
-    # ── Bloc 5 : Contrib TRI ─────────────────────────────────────────────────
+    # ── Bloc 5 : Contrib TRI (toutes catégories combinées, tous types) ──────
     _sec("💹 Contrib TRI")
-    cat_grp = df_type.groupby("Categorie").agg(
+    cat_grp = df_hist.groupby("Categorie").agg(
         n=("Categorie", "size"),
         tri_moyen=("TAUX D'INTERET", "mean"),
     )
@@ -783,14 +786,15 @@ def _page_risque_credit() -> None:
         fig_tri = go.Figure(go.Bar(
             x=contrib.index, y=contrib.values,
             marker_color="#C0501A",
-            text=[f"{v:.2f}" for v in contrib.values],
+            width=0.4,
+            text=[f"{v:.2f}%" for v in contrib.values],
             textposition="outside",
         ))
         fig_tri.update_layout(
             template="plotly_dark",
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            xaxis_title="Catégorie d'instrument",
+            xaxis_title="Catégorie d'instrument (BSF/BT/CD + sous-catégories OBLIG)",
             yaxis_title="Contribution au TRI moyen pondéré (pts)",
             margin=dict(t=20, b=10),
             height=420,

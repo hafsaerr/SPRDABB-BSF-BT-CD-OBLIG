@@ -80,11 +80,17 @@ def _match_asset_type(sheet_name: str) -> Optional[tuple[str, str]]:
 def _oblig_categorie(nom_instrument) -> str:
     """Sous-catégorie d'obligation déduite du nom du titre (mot-clé) :
     OBL_SUBD (subordonnée), OBL_SUBD_PERP (subordonnée perpétuelle),
-    OBL_ORDN_GREEN (obligation verte), sinon OBL_ORDN par défaut."""
+    OBL_ORDN_GREEN (obligation verte), OBL_CONV (convertible), sinon
+    OBL_ORDN par défaut. Aucune catégorie n'est codée en dur par émetteur :
+    une nouvelle obligation "CONV"/"GREEN"/"SUB"/"PERP" dans le nom du titre
+    est reclassée automatiquement, sans modification du code."""
     s = str(nom_instrument).upper()
     is_sub = bool(re.search(r"\bSUB\b", s)) or "SUBD" in s or "SUBORD" in s
     is_perp = "PERP" in s
     is_green = "GREEN" in s or "VERT" in s
+    is_conv = bool(re.search(r"\bCONV\b", s)) or "CONVERTIBLE" in s
+    if is_conv:
+        return "OBL_CONV"
     if is_sub and is_perp:
         return "OBL_SUBD_PERP"
     if is_sub:
