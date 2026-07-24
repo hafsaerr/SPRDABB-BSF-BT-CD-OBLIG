@@ -584,6 +584,15 @@ def _page_risque_credit() -> None:
     """, unsafe_allow_html=True)
 
     df_hist = get_historical_spreads()
+
+    # Garde-fou : si un cache Streamlit périmé (ancien schéma sans Secteur/
+    # Categorie) traîne encore en mémoire côté serveur, on le vide et on
+    # recharge une fois automatiquement plutôt que de planter.
+    required_cols = {"Type", "Emetteur", "Secteur", "Categorie", "Spread", "TAUX BDT"}
+    if not df_hist.empty and not required_cols.issubset(df_hist.columns):
+        st.cache_data.clear()
+        st.rerun()
+
     if df_hist.empty:
         st.warning(
             "Aucune donnée historique trouvée dans **historique_spreads/**. "
