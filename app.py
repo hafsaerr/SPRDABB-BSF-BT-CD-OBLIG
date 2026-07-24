@@ -578,7 +578,7 @@ def _page_risque_credit() -> None:
         <div>
             <div style="font-size:1.3rem;font-weight:900;color:#FFFFFF;">Risque de Crédit</div>
             <div style="font-size:0.85rem;color:#F5C518;">
-                Probabilité de défaut implicite, heatmap et courbes de spread par émetteur</div>
+                Probabilité de défaut implicite, heatmap, secteurs, courbe BDT et contribution au TRI</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -587,7 +587,7 @@ def _page_risque_credit() -> None:
     if df_hist.empty:
         st.warning(
             "Aucune donnée historique trouvée dans **historique_spreads/**. "
-            "Déposez-y les fichiers Excel d'export CD/BSF/BT pour alimenter cette page."
+            "Déposez-y les fichiers Excel d'export CD/BSF/BT/OBLIG pour alimenter cette page."
         )
         return
 
@@ -687,30 +687,106 @@ def _page_risque_credit() -> None:
         )
         st.plotly_chart(fig_hm, use_container_width=True)
 
-    # ── Bloc 3 : Courbes de spread superposées par émetteur ─────────────────
-    _sec("📈 Courbes de spread par émetteur")
-    fig_curves = go.Figure()
-    for emetteur in sorted(df_type["Emetteur"].unique()):
-        sub = df_type[df_type["Emetteur"] == emetteur]
-        agg = sub.groupby("_mat")["Spread"].mean().reindex(maturites_dispo)
-        fig_curves.add_trace(go.Scatter(
-            x=maturites_dispo,
-            y=agg.values,
-            mode="lines+markers",
-            name=emetteur,
-            connectgaps=False,
+    # ── Bloc 3 : Courbe des Spreads par Secteur ─────────────────────────────
+    _sec("🏭 Courbe des Spreads par Secteur")
+    secteur_grp = df_type.groupby("Secteur").agg(
+        n=("Secteur", "size"),
+        spread_moyen=("Spread", "mean"),
+    ).sort_values("n", ascending=False)
+
+    if secteur_grp.empty:
+        st.info("Pas de données sectorielles disponibles.")
+    else:
+        poids_pct = secteur_grp["n"] / secteur_grp["n"].sum() * 100
+        fig_secteur = go.Figure()
+        fig_secteur.add_trace(go.Bar(
+            x=secteur_grp.index, y=poids_pct,
+            name="Poids (% des titres)",
+            marker_color="#C0501A",
+            yaxis="y1",
         ))
-    fig_curves.update_layout(
+        fig_secteur.add_trace(go.Scatter(
+            x=secteur_grp.index, y=secteur_grp["spread_moyen"],
+            name="Spread moyen (bps)",
+            mode="lines+markers",
+            line=dict(color="#F5C518", width=2),
+            yaxis="y2",
+        ))
+        fig_secteur.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_title="Secteur",
+            yaxis=dict(title="Poids (%)"),
+            yaxis2=dict(title="Spread moyen (bps)", overlaying="y", side="right"),
+            margin=dict(t=20, b=10),
+            height=440,
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig_secteur, use_container_width=True)
+
+    # ── Bloc 4 : Courbe des taux BDT + Spreads Moyens ───────────────────────
+    _sec("📉 Évolution de la Courbe des taux BDT + Spreads Moyens")
+    mat_grp = df_type.groupby("_mat").agg(
+        bdt_moyen=("TAUX BDT", "mean"),
+        spread_moyen=("Spread", "mean"),
+    ).reindex(maturites_dispo)
+
+    fig_bdt = go.Figure()
+    fig_bdt.add_trace(go.Bar(
+        x=maturites_dispo, y=mat_grp["bdt_moyen"] * 100,
+        name="Taux BDT interpolé (%)",
+        marker_color="#5B8DB8",
+        yaxis="y1",
+    ))
+    fig_bdt.add_trace(go.Scatter(
+        x=maturites_dispo, y=mat_grp["spread_moyen"],
+        name="Spread moyen marché (bps)",
+        mode="lines+markers",
+        line=dict(color="#F5C518", width=2),
+        yaxis="y2",
+        connectgaps=False,
+    ))
+    fig_bdt.update_layout(
         template="plotly_dark",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         xaxis_title="Maturité",
-        yaxis_title="Spread moyen (bps)",
+        yaxis=dict(title="Taux BDT (%)"),
+        yaxis2=dict(title="Spread moyen (bps)", overlaying="y", side="right"),
         margin=dict(t=20, b=10),
-        height=460,
+        height=440,
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
     )
-    st.plotly_chart(fig_curves, use_container_width=True)
+    st.plotly_chart(fig_bdt, use_container_width=True)
+
+    # ── Bloc 5 : Contrib TRI ─────────────────────────────────────────────────
+    _sec("💹 Contrib TRI")
+    cat_grp = df_type.groupby("Categorie").agg(
+        n=("Categorie", "size"),
+        tri_moyen=("TAUX D'INTERET", "mean"),
+    )
+    if cat_grp.empty:
+        st.info("Pas de données exploitables pour la contribution au TRI.")
+    else:
+        poids = cat_grp["n"] / cat_grp["n"].sum()
+        contrib = (poids * cat_grp["tri_moyen"]).sort_values(ascending=False)
+        fig_tri = go.Figure(go.Bar(
+            x=contrib.index, y=contrib.values,
+            marker_color="#C0501A",
+            text=[f"{v:.2f}" for v in contrib.values],
+            textposition="outside",
+        ))
+        fig_tri.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis_title="Catégorie d'instrument",
+            yaxis_title="Contribution au TRI moyen pondéré (pts)",
+            margin=dict(t=20, b=10),
+            height=420,
+        )
+        st.plotly_chart(fig_tri, use_container_width=True)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE HISTORIQUE DES SPREADS
@@ -734,7 +810,7 @@ def _page_historique() -> None:
     if df_hist.empty:
         st.warning(
             "Aucune donnée historique trouvée dans **historique_spreads/**. "
-            "Déposez-y les fichiers Excel d'export CD/BSF/BT pour alimenter cette page."
+            "Déposez-y les fichiers Excel d'export CD/BSF/BT/OBLIG pour alimenter cette page."
         )
         return
 
