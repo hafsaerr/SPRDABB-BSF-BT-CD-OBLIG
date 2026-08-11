@@ -25,7 +25,7 @@ try:
     import streamlit as _st_tmp
     CREDENTIALS = {_st_tmp.secrets["USERNAME"]: _st_tmp.secrets["PASSWORD"]}
 except Exception:
-    CREDENTIALS = {"spreadABB": "albarid2026"}
+    CREDENTIALS = {"spread_taux": "Curve@Desk2026!"}
 APP_TITLE   = "Spread Manager — BSF & CD | Al Barid Bank"
 CACHE_DIR   = Path(__file__).parent / "cache_bam_curves"
 ASSETS_DIR  = Path(__file__).parent / "assets"
@@ -280,12 +280,9 @@ def _logo_b64() -> str:
     return ""
 
 def _logo_img(size: int = 70) -> str:
-    b = _logo_b64()
-    if b:
-        return (f'<img src="data:image/png;base64,{b}" '
-                f'style="width:{size}px;height:{size}px;object-fit:contain;'
-                f'border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.5);" />')
-    return '<div style="font-size:42px;">🏦</div>'
+    # Logo désactivé sur demande — laisse la fonction en place (appelée dans
+    # plusieurs en-têtes) mais ne rend plus rien.
+    return ""
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LOGIN
@@ -312,7 +309,7 @@ def _show_login() -> None:
     """, unsafe_allow_html=True)
 
     with st.form("login_form", clear_on_submit=False):
-        username = st.text_input("Username", placeholder="spreadABB",  key="lu")
+        username = st.text_input("Username", placeholder="spread_taux",  key="lu")
         password = st.text_input("Code", type="password", placeholder="••••••••", key="lp")
         submit   = st.form_submit_button("Se connecter", use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)

@@ -33,8 +33,8 @@ L'application sera accessible sur **http://localhost:8501**.
 Créez `.streamlit/secrets.toml` (non commité) :
 
 ```toml
-USERNAME = "spreadABB"
-PASSWORD = "albarid2026"
+USERNAME = "spread_taux"
+PASSWORD = "Curve@Desk2026!"
 ```
 
 ---
@@ -106,7 +106,7 @@ Colonnes obligatoires :
 
 | Variable | Description | Valeur par défaut |
 |---|---|---|
-| `USERNAME` | Login de l'application | `spreadABB` |
+| `USERNAME` | Login de l'application | `spread_taux` |
 | `PASSWORD` | Mot de passe de l'application | *(non communiqué)* |
 
 ---
