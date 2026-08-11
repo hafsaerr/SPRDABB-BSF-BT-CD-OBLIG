@@ -679,17 +679,20 @@ def _page_historique() -> None:
 
     with c2:
         emetteurs_dispo = sorted(df_type["Emetteur"].unique())
-        emetteur = st.selectbox("Émetteur", emetteurs_dispo, key="hist_emetteur")
+        emetteur = st.selectbox("Émetteur", emetteurs_dispo, key=f"hist_emetteur_{asset_type}")
     df_em = df_type[df_type["Emetteur"] == emetteur].copy()
 
     with c3:
         date_min = df_em["DATE D'EMISSION"].min().date()
         date_max = df_em["DATE D'EMISSION"].max().date()
+        # Clé dynamique : sans ça, Streamlit garde en mémoire la plage de
+        # l'émetteur précédemment sélectionné (hors des nouvelles bornes
+        # min/max), ce qui provoquait l'icône d'erreur sur le widget.
         date_range = st.date_input(
             "Date d'émission (du / au)",
             value=(date_min, date_max),
             min_value=date_min, max_value=date_max,
-            key="hist_dates",
+            key=f"hist_dates_{asset_type}_{emetteur}",
         )
 
     df_em["_mat"] = df_em.apply(
@@ -699,7 +702,9 @@ def _page_historique() -> None:
         maturites_dispo = sorted(
             (m for m in df_em["_mat"].unique() if m != "inconnue"), key=_mat_sort_key
         )
-        maturite_sel = st.selectbox("Maturité", ["Toutes"] + maturites_dispo, key="hist_mat")
+        maturite_sel = st.selectbox(
+            "Maturité", ["Toutes"] + maturites_dispo, key=f"hist_mat_{asset_type}_{emetteur}"
+        )
 
     # ── Application des filtres ──────────────────────────────────────────────
     df_result = df_em.copy()
