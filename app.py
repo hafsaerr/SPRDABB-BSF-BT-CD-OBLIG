@@ -296,17 +296,8 @@ def _show_login() -> None:
     <div class="login-wrapper">
     """, unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div style="text-align:center; padding:34px 0 20px 0;">
-        {_logo_img(90)}
-        <div style="font-size:26px;font-weight:900;color:#FFFFFF;
-                    letter-spacing:0.5px;margin:14px 0 4px 0;">Spread Manager</div>
-        <div style="font-size:16px;font-weight:700;color:#F5C518;margin-bottom:4px;">
-            Al Barid Bank</div>
-        <div style="font-size:12px;color:#FFFFFF;margin-bottom:20px;">
-            Calculateur de Spread</div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Spread Manager")
+    st.caption("Calculateur de Spread")
 
     with st.form("login_form", clear_on_submit=False):
         username = st.text_input("Username", placeholder="spread_taux",  key="lu")
@@ -327,15 +318,8 @@ def _show_login() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 def _render_sidebar() -> str:
     with st.sidebar:
-        st.markdown(f"""
-        <div style="text-align:center;padding:14px 0 6px 0;">{_logo_img(72)}</div>
-        <div style="text-align:center;padding:6px 0 16px 0;">
-            <div style="font-size:15px;font-weight:900;color:#F5C518;letter-spacing:2px;">
-                Al Barid Bank</div>
-            <div style="font-size:11px;color:#FFFFFF;margin-top:2px;">Spread Manager</div>
-            <hr style="border-color:rgba(200,80,30,0.3);margin:12px 0 8px 0;">
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown("#### Spread Manager")
+        st.markdown("---")
 
         current = st.session_state.get("_nav", "Accueil")
         for item in ["Accueil", "Calculateur de Spread", "Risque de Crédit", "Historique des Spreads"]:
@@ -453,20 +437,8 @@ def _mat_label_to_years(label: str) -> float:
 # PAGE ACCUEIL
 # ─────────────────────────────────────────────────────────────────────────────
 def _page_home() -> None:
-    st.markdown(f"""
-    <div style="background:linear-gradient(90deg,#1E0A03 0%,#130602 100%);
-                border:1px solid rgba(200,80,30,0.4);border-radius:14px;
-                padding:22px 28px;margin-bottom:22px;
-                display:flex;align-items:center;gap:20px;">
-        {_logo_img(60)}
-        <div>
-            <div style="font-size:1.55rem;font-weight:900;color:#FFFFFF;">Spread Manager</div>
-            <div style="font-size:1rem;font-weight:700;color:#F5C518;">Al Barid Bank</div>
-            <div style="font-size:0.85rem;color:#FFFFFF;margin-top:2px;">
-                Calcul du spread BSF, CD, BT &amp; Obligations vs courbe BDT Bank Al-Maghrib</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Spread Manager")
+    st.caption("Calcul du spread BSF, CD, BT & Obligations vs courbe BDT Bank Al-Maghrib")
 
     _sec("📋 Guide d'utilisation")
     col1, col2 = st.columns(2, gap="large")
@@ -566,19 +538,8 @@ def _page_home() -> None:
 # PAGE RISQUE DE CRÉDIT
 # ─────────────────────────────────────────────────────────────────────────────
 def _page_risque_credit() -> None:
-    st.markdown(f"""
-    <div style="background:linear-gradient(90deg,#1E0A03 0%,#130602 100%);
-                border:1px solid rgba(200,80,30,0.4);border-radius:14px;
-                padding:18px 26px;margin-bottom:20px;
-                display:flex;align-items:center;gap:18px;">
-        {_logo_img(52)}
-        <div>
-            <div style="font-size:1.3rem;font-weight:900;color:#FFFFFF;">Risque de Crédit</div>
-            <div style="font-size:0.85rem;color:#F5C518;">
-                Probabilité de défaut implicite et heatmap émetteur × maturité</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Risque de Crédit")
+    st.caption("Probabilité de défaut implicite et heatmap émetteur × maturité")
 
     df_hist = get_historical_spreads()
 
@@ -698,19 +659,8 @@ def _page_risque_credit() -> None:
 # PAGE HISTORIQUE DES SPREADS
 # ─────────────────────────────────────────────────────────────────────────────
 def _page_historique() -> None:
-    st.markdown(f"""
-    <div style="background:linear-gradient(90deg,#1E0A03 0%,#130602 100%);
-                border:1px solid rgba(200,80,30,0.4);border-radius:14px;
-                padding:18px 26px;margin-bottom:20px;
-                display:flex;align-items:center;gap:18px;">
-        {_logo_img(52)}
-        <div>
-            <div style="font-size:1.3rem;font-weight:900;color:#FFFFFF;">Historique des Spreads</div>
-            <div style="font-size:0.85rem;color:#F5C518;">
-                Consultation brute de la data historique par émetteur</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Historique des Spreads")
+    st.caption("Consultation brute de la data historique par émetteur")
 
     df_hist = get_historical_spreads()
     if df_hist.empty:
@@ -809,20 +759,8 @@ def _page_historique() -> None:
 # PAGE CALCULATEUR
 # ─────────────────────────────────────────────────────────────────────────────
 def _page_spread() -> None:
-    st.markdown(f"""
-    <div style="background:linear-gradient(90deg,#1E0A03 0%,#130602 100%);
-                border:1px solid rgba(200,80,30,0.4);border-radius:14px;
-                padding:18px 26px;margin-bottom:20px;
-                display:flex;align-items:center;gap:18px;">
-        {_logo_img(52)}
-        <div>
-            <div style="font-size:1.35rem;font-weight:900;color:#FFFFFF;">
-                Calculateur de Spread</div>
-            <div style="font-size:0.85rem;color:#FFFFFF;">
-                BSF, CD, BT &amp; OBLIG_ORDN — Courbe BDT Bank Al-Maghrib</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("## Calculateur de Spread")
+    st.caption("BSF, CD, BT & OBLIG_ORDN — Courbe BDT Bank Al-Maghrib")
 
     # ── ÉTAPE 1 : Upload ──────────────────────────────────────────────────────
     _sec("📁 Étape 1 — Charger le fichier")
