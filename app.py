@@ -662,6 +662,15 @@ def _page_historique() -> None:
     st.markdown("## Historique des Spreads")
     st.caption("Consultation brute de la data historique par émetteur")
 
+    with st.expander("📤 Calculer un historique par émetteur depuis un fichier Maroclear"):
+        st.caption(
+            "Même calcul que la page Calculateur de Spread (upload, filtres, courbes BDT), "
+            "avec en plus un sélecteur d'émetteur pour ne calculer l'historique que pour un "
+            "seul émetteur à la fois."
+        )
+        _run_maroclear_calculator(key_prefix="hist", with_emetteur_filter=True)
+
+    _sec("🗂️ Données historiques déjà calculées")
     df_hist = get_historical_spreads()
     if df_hist.empty:
         st.warning(
@@ -761,22 +770,32 @@ def _page_historique() -> None:
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PAGE CALCULATEUR
+# CALCUL MAROCLEAR (partagé Calculateur + Historique par émetteur)
 # ─────────────────────────────────────────────────────────────────────────────
-def _page_spread() -> None:
-    st.markdown("## Calculateur de Spread")
-    st.caption("BSF, CD, BT & OBLIG_ORDN — Courbe BDT Bank Al-Maghrib")
+def _run_maroclear_calculator(key_prefix: str, with_emetteur_filter: bool = False) -> Optional[pd.DataFrame]:
+    """Flux complet upload Maroclear -> filtres -> calcul des spreads BDT.
 
+    Retourne le DataFrame calculé (avec Type/Taux BDT/Spread...) une fois le
+    calcul terminé, ou None tant que le flux n'est pas allé jusqu'au bout
+    (pas de fichier chargé, filtres vides, bouton pas encore cliqué...).
+
+    `with_emetteur_filter` ajoute un sélecteur d'émetteur (colonne
+    PREFERREDNAMEISSUER) qui restreint le calcul à un seul émetteur —
+    utilisé par la page "Historique des Spreads" pour un historique par
+    émetteur, alors que le Calculateur (with_emetteur_filter=False) calcule
+    sur tous les émetteurs sélectionnés d'un coup.
+    """
     # ── ÉTAPE 1 : Upload ──────────────────────────────────────────────────────
     _sec("📁 Étape 1 — Charger le fichier")
     uploaded = st.file_uploader(
         "Fichier Maroclear (.xlsx)",
         type=["xlsx"],
         help="Fichier exporté depuis Maroclear contenant les instruments",
+        key=f"{key_prefix}_upload",
     )
     if uploaded is None:
         st.info("Chargez un fichier Excel pour commencer.")
-        return
+        return None
 
     # ── ÉTAPE 2 : Détection auto des feuilles ─────────────────────────────────
     _sec("📄 Étape 2 — Sélectionner la feuille")
@@ -785,12 +804,13 @@ def _page_spread() -> None:
         sheet_names = xl.sheet_names
     except Exception as e:
         st.error(f"Impossible de lire le fichier : {e}")
-        return
+        return None
 
     sheet = st.selectbox(
         "Feuille Excel",
         options=sheet_names,
         help="Toutes les feuilles disponibles dans votre fichier sont listées ici.",
+        key=f"{key_prefix}_sheet",
     )
 
     try:
@@ -798,7 +818,7 @@ def _page_spread() -> None:
         df = pd.read_excel(uploaded, sheet_name=sheet, engine="openpyxl")
     except Exception as e:
         st.error(f"Erreur de lecture de la feuille '{sheet}' : {e}")
-        return
+        return None
 
     st.success(f"✅ Feuille **{sheet}** chargée — {len(df)} lignes, {len(df.columns)} colonnes.")
 
@@ -808,7 +828,7 @@ def _page_spread() -> None:
     if missing:
         st.error(f"Colonnes manquantes : **{missing}**\n\n"
                  f"Colonnes disponibles : {list(df.columns)}")
-        return
+        return None
 
     # ── ÉTAPE 3 : Paramètres de filtrage ──────────────────────────────────────
     _sec("⚙️ Étape 3 — Paramètres de filtrage")
@@ -821,22 +841,22 @@ def _page_spread() -> None:
     # Ligne 1 — Types d'instruments (4 checkboxes)
     fc1, fc2, fc3, fc4 = st.columns(4)
     with fc1:
-        inc_cd    = st.checkbox("CD — Certificats de Dépôt",         value=True)
+        inc_cd    = st.checkbox("CD — Certificats de Dépôt",         value=True,  key=f"{key_prefix}_cd")
     with fc2:
-        inc_bsf   = st.checkbox("BSF — Bons de Soc. Financières",    value=True)
+        inc_bsf   = st.checkbox("BSF — Bons de Soc. Financières",    value=True,  key=f"{key_prefix}_bsf")
     with fc3:
-        inc_bt    = st.checkbox("BT — Billets de Trésorerie",         value=False)
+        inc_bt    = st.checkbox("BT — Billets de Trésorerie",         value=False, key=f"{key_prefix}_bt")
     with fc4:
-        inc_oblig = st.checkbox("OBLIG_ORDN — Obligations (hors banques)", value=False)
+        inc_oblig = st.checkbox("OBLIG_ORDN — Obligations (hors banques)", value=False, key=f"{key_prefix}_oblig")
 
     # Ligne 2 — Maturité
     mc1, mc2 = st.columns(2)
     with mc1:
         res_min_y = st.number_input("Maturité min (ans)", value=0.0, min_value=0.0,
-                                    max_value=30.0, step=0.5, format="%.1f")
+                                    max_value=30.0, step=0.5, format="%.1f", key=f"{key_prefix}_mat_min")
     with mc2:
         res_max_y = st.number_input("Maturité max (ans)", value=5.0, min_value=0.0,
-                                    max_value=30.0, step=0.5, format="%.1f")
+                                    max_value=30.0, step=0.5, format="%.1f", key=f"{key_prefix}_mat_max")
 
     # Ligne 3 — Date d'émission (ISSUEDT)
     st.markdown(
@@ -854,7 +874,7 @@ def _page_spread() -> None:
             value=_date_min_file,
             min_value=_bound_min,
             max_value=_bound_max,
-            key="iss_min",
+            key=f"{key_prefix}_iss_min",
         )
     with dc2:
         date_iss_max = st.date_input(
@@ -862,7 +882,7 @@ def _page_spread() -> None:
             value=_date_max_file,
             min_value=_bound_min,
             max_value=_bound_max,
-            key="iss_max",
+            key=f"{key_prefix}_iss_max",
         )
 
     # Conversion maturité en jours
@@ -871,7 +891,7 @@ def _page_spread() -> None:
 
     if not any([inc_cd, inc_bsf, inc_bt, inc_oblig]):
         st.warning("Sélectionnez au moins un type d'instrument.")
-        return
+        return None
 
     # ── Filtrage ───────────────────────────────────────────────────────────────
     dff = df.copy()
@@ -916,6 +936,26 @@ def _page_spread() -> None:
     mask_combined &= mask_issuedt & mask_resid
     selected_idx = df.index[mask_combined].tolist()
 
+    # ── Filtre Émetteur (page Historique — historique par émetteur) ─────────────
+    if with_emetteur_filter and selected_idx:
+        _issuer_col = next(
+            (c for c in ["PREFERREDNAMEISSUER", "PREFERREDNAMEREGISTRAR"] if c in df.columns), None
+        )
+        if _issuer_col is None:
+            st.warning("Colonne émetteur (PREFERREDNAMEISSUER) introuvable dans ce fichier — "
+                       "filtre émetteur indisponible.")
+        else:
+            emetteurs_dispo = sorted(
+                e for e in df.loc[selected_idx, _issuer_col].dropna().astype(str).str.strip().unique() if e
+            )
+            if not emetteurs_dispo:
+                st.warning("Aucun émetteur identifiable avec ces filtres.")
+            else:
+                emetteur_sel = st.selectbox("Émetteur", emetteurs_dispo, key=f"{key_prefix}_emetteur")
+                mask_emetteur = df[_issuer_col].fillna("").astype(str).str.strip().eq(emetteur_sel)
+                mask_combined &= mask_emetteur
+                selected_idx = df.index[mask_combined].tolist()
+
     # ── KPIs avant calcul ─────────────────────────────────────────────────────
     type_labels = []
     if inc_cd:    type_labels.append("CD")
@@ -945,7 +985,7 @@ def _page_spread() -> None:
 
     if not selected_idx:
         st.warning("Aucun instrument trouvé avec ces filtres.")
-        return
+        return None
 
     # ── Colonne taux instrument (optionnelle) ──────────────────────────────────
     rate_candidates = _detect_rate_cols(list(df.columns))
@@ -955,14 +995,15 @@ def _page_spread() -> None:
             "Colonne taux instrument (pour calcul spread)",
             ["— aucune —"] + rate_candidates,
             index=1,
+            key=f"{key_prefix}_rate_col",
         )
         rate_col = None if choice == "— aucune —" else choice
     else:
         st.info("Aucune colonne taux détectée — seul le Taux BDT sera calculé.")
 
     # ── Bouton calcul ──────────────────────────────────────────────────────────
-    if not st.button("⚡ Calculer les spreads", use_container_width=True):
-        return
+    if not st.button("⚡ Calculer les spreads", use_container_width=True, key=f"{key_prefix}_run"):
+        return None
 
     # ── Préparer le df filtré ──────────────────────────────────────────────────
     df_work = df.loc[selected_idx].copy()
@@ -1149,6 +1190,19 @@ def _page_spread() -> None:
         use_container_width=True,
         height=420,
     )
+
+    return df_work
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAGE CALCULATEUR
+# ─────────────────────────────────────────────────────────────────────────────
+def _page_spread() -> None:
+    st.markdown("## Calculateur de Spread")
+    st.caption("BSF, CD, BT & OBLIG_ORDN — Courbe BDT Bank Al-Maghrib")
+
+    df_work = _run_maroclear_calculator(key_prefix="calc", with_emetteur_filter=False)
+    if df_work is None:
+        return
 
     # ═════════════════════════════════════════════════════════════════════════
     # EXPORT EXCEL
