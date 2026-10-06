@@ -275,6 +275,7 @@ class BamCurveFetcher:
                 local_hits.append(d)  # fallback sur local si Supabase retourne None
 
         # ── Étape 3 : charger depuis cache local ──────────────────────────────
+        corrupt_dates: list[date] = []
         for d in local_hits:
             try:
                 curve = self._load_from_cache(d)
@@ -283,9 +284,19 @@ class BamCurveFetcher:
                 if curve is not None and d not in supa_dates:
                     _supa_save(d, curve[0], curve[1])
             except Exception:
-                results[d] = None
+                # Fichier de cache perime/corrompu (ex: mauvaise courbe ecrite par
+                # un ancien bug) : on le supprime et on retente via le reseau au
+                # lieu d'abandonner silencieusement pour cette date.
+                try:
+                    self._cache_path(d).unlink(missing_ok=True)
+                except Exception:
+                    pass
+                corrupt_dates.append(d)
 
-        done = len(supabase_hits) + len(local_hits)
+        if corrupt_dates:
+            network_dates = network_dates + corrupt_dates
+
+        done = len(supabase_hits) + len(local_hits) - len(corrupt_dates)
         n_cache = done
         if progress_callback:
             progress_callback(done, total, n_cache, len(network_dates), 0.0)
