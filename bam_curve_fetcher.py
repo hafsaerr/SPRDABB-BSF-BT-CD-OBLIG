@@ -63,18 +63,27 @@ RETRY_BACKOFF = (0.5, 1.0, 2.0)
 
 NO_DATA_MARKER = ""
 
+_BROWSER_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36"
+)
+
 SYNC_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BAM-Fetcher/2.0",
-    "Accept": "text/csv,application/octet-stream,text/plain,text/html,*/*",
-    "Accept-Encoding": "gzip, deflate",
+    "User-Agent": _BROWSER_UA,
+    "Accept": "text/csv,application/octet-stream,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
+    "Referer": BASE_URL_FR,
 }
 
 ASYNC_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BAM-Fetcher/2.0",
-    "Accept": "text/csv,application/octet-stream,text/plain,text/html,*/*",
-    "Accept-Encoding": "gzip, deflate",
+    "User-Agent": _BROWSER_UA,
+    "Accept": "text/csv,application/octet-stream,text/plain,text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive",
+    "Referer": BASE_URL_FR,
 }
 
 
