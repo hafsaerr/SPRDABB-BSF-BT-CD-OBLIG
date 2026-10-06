@@ -219,7 +219,7 @@ def export_tcn_bt(df_work: pd.DataFrame, rate_col: Optional[str] = None) -> byte
 
     _exp_cols = (
         ([_code_col] if _code_col else [])
-        + ["ENGLONGNAME", "ISSUEDT", "MATURITYDT_L", "Maturité (ans)", "Taux BDT"]
+        + ["ENGLONGNAME", "ISSUERCD", "ISSUEDT", "MATURITYDT_L", "Maturité (ans)", "Taux BDT"]
         + (["Spread"]          if "Spread"          in df_xls_filt.columns else [])
         + (["_taux_instr_pct"] if "_taux_instr_pct" in df_xls_filt.columns else [])
     )
@@ -227,6 +227,7 @@ def export_tcn_bt(df_work: pd.DataFrame, rate_col: Optional[str] = None) -> byte
 
     _col_labels: dict = {
         "ENGLONGNAME":    "DETAILS DU TITRE",
+        "ISSUERCD":       "CODE EMETTEUR",
         "ISSUEDT":        "DATE D'EMISSION",
         "MATURITYDT_L":   "DATE D'ECHEANCE",
         "Maturité (ans)": "Maturite residuelle",
@@ -291,6 +292,8 @@ def export_oblig(
     _emetteur_col = next((c for c in ["PREFERREDNAMEREGISTRAR", "PREFERREDNAMEISSUER"] if c in df_oblig.columns), None)
     if _emetteur_col:
         src_cols.append(_emetteur_col)
+    if "ISSUERCD" in df_oblig.columns:
+        src_cols.append("ISSUERCD")
     if "SECTEUR" in df_oblig.columns:
         src_cols.append("SECTEUR")
     src_cols += ["ISSUEDT", "MATURITYDT_L"]
@@ -303,6 +306,7 @@ def export_oblig(
 
     rename: dict = {
         "ENGPREFERREDNAME":   "NOM_INSTRUMENT",
+        "ISSUERCD":            "CODE_EMETTEUR",
         "SECTEUR":             "SECTEUR",
         "ISSUEDT":             "DATE_EMISSION",
         "MATURITYDT_L":        "DATE_ECHEANCE",

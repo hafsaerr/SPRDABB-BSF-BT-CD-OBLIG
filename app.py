@@ -1294,7 +1294,7 @@ def _page_spread() -> None:
 
         _exp_cols = (
             ([_code_col] if _code_col else [])
-            + ["ENGLONGNAME", "ISSUEDT", "MATURITYDT_L", "Maturité (ans)", "Taux BDT"]
+            + ["ENGLONGNAME", "ISSUERCD", "ISSUEDT", "MATURITYDT_L", "Maturité (ans)", "Taux BDT"]
             + (["Spread"]             if "Spread"             in df_xls_filt.columns else [])
             + (["_taux_instr_pct"]    if "_taux_instr_pct"    in df_xls_filt.columns else [])
         )
@@ -1302,6 +1302,7 @@ def _page_spread() -> None:
 
         _col_labels: dict = {
             "ENGLONGNAME":    "DETAILS DU TITRE",
+            "ISSUERCD":       "CODE EMETTEUR",
             "ISSUEDT":        "DATE D'EMISSION",
             "MATURITYDT_L":   "DATE D'ECHEANCE",
             "Maturité (ans)": "Maturite residuelle",
@@ -1325,7 +1326,7 @@ def _page_spread() -> None:
                     cell = ws.cell(r, c)
                     cell.fill   = _YELLOW if c in hl_cols else _GRAY
                     cell.border = _BORDER
-            for col_letter, w in zip("ABCDEFGH", [18, 38, 14, 14, 14, 12, 10, 14]):
+            for col_letter, w in zip("ABCDEFGHI", [18, 38, 14, 14, 14, 14, 12, 10, 14]):
                 ws.column_dimensions[col_letter].width = w
 
         def _apply_number_formats(ws, n_data: int) -> None:
@@ -1645,6 +1646,8 @@ def _page_spread() -> None:
         _emetteur_col = next((c for c in ["PREFERREDNAMEISSUER", "PREFERREDNAMEREGISTRAR"] if c in df_oblig.columns), None)
         if _emetteur_col:
             _oblig_src_cols.append(_emetteur_col)
+        if "ISSUERCD" in df_oblig.columns:
+            _oblig_src_cols.append("ISSUERCD")
         if "SECTEUR" in df_oblig.columns:
             _oblig_src_cols.append("SECTEUR")
         _oblig_src_cols += ["ISSUEDT", "MATURITYDT_L"]
@@ -1657,6 +1660,7 @@ def _page_spread() -> None:
 
         _oblig_rename: dict = {
             "ENGPREFERREDNAME":   "NOM_INSTRUMENT",
+            "ISSUERCD":           "CODE_EMETTEUR",
             "SECTEUR":            "SECTEUR",
             "ISSUEDT":            "DATE_EMISSION",
             "MATURITYDT_L":       "DATE_ECHEANCE",
