@@ -1036,13 +1036,23 @@ def _run_maroclear_calculator(key_prefix: str, with_emetteur_filter: bool = Fals
 
     # ── Récupération courbes BAM ───────────────────────────────────────────────
     _sec("🌐 Récupération des courbes BDT BAM")
+
+    from core.supabase_cache import is_available as _supa_is_available, get_all_cached_dates as _supa_cached_dates
+    if _supa_is_available():
+        st.caption(f"🟢 Supabase connecté — {len(_supa_cached_dates())} courbe(s) en cache dans la base.")
+    else:
+        st.caption("🔴 Supabase NON connecté (secrets manquants/invalides sur Streamlit Cloud, ou projet en pause) — aucun cache persistant, tout repose sur le scraping bkam.ma en direct.")
+
     pbar    = st.progress(0.0)
     stxt    = st.empty()
     fetcher = BamCurveFetcher(cache_dir=str(CACHE_DIR))
 
     total_dates = len(unique_dates)
+    _last = {"n_cache": 0, "n_net": 0}
 
     def _progress(done: int, total: int, n_cache: int, n_net: int, eta: float) -> None:
+        _last["n_cache"] = n_cache
+        _last["n_net"] = n_net
         pbar.progress(done / max(total, 1))
         eta_str = f" — ETA : {eta:.0f}s" if eta > 1 else ""
         stxt.markdown(
@@ -1080,8 +1090,11 @@ def _run_maroclear_calculator(key_prefix: str, with_emetteur_filter: bool = Fals
     pbar.empty(); stxt.empty()
     ok     = sum(1 for v in curves.values() if v is not None)
     no_data = total_dates - ok
-    st.success(f"✅ {ok} courbes BDT récupérées (Supabase + cache + BAM)."
-               + (f"  ❌ {no_data} date(s) sans données BAM (jour non ouvré)." if no_data else ""))
+    st.success(
+        f"✅ {ok} courbes BDT récupérées sur {total_dates} dates "
+        f"(dont {_last['n_cache']} depuis Supabase/cache, {_last['n_net']} scrapées en direct sur bkam.ma)."
+        + (f"  ❌ {no_data} date(s) sans données (ni cache, ni bkam.ma)." if no_data else "")
+    )
 
     # ── Calcul taux BDT + spread ───────────────────────────────────────────────
     bdt_rates:   list[Optional[float]] = []
