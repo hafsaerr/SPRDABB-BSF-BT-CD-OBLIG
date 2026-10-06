@@ -23,8 +23,10 @@ def _get_client():
         url = st.secrets["supabase"]["url"]
         key = st.secrets["supabase"]["key"]
         _client_cache = create_client(url, key)
+        print("[BAM-DIAG] Supabase client created OK", flush=True)
         return _client_cache
-    except Exception:
+    except Exception as e:
+        print(f"[BAM-DIAG] Supabase client unavailable: {type(e).__name__}: {e}", flush=True)
         return None
 
 

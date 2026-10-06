@@ -361,8 +361,10 @@ class BamCurveFetcher:
                 curve = self._parse_curve(txt, d)
                 self._cache_path(d).write_text(txt, encoding="utf-8")
                 return d, curve
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[BAM-DIAG] {d}: direct CSV parse failed: {e}", flush=True)
+        else:
+            print(f"[BAM-DIAG] {d}: direct CSV fetch returned no text", flush=True)
 
         # 2) Fallback to HTML page + CSV link discovery
         txt = await self._async_fetch_via_html_with_retry(session, d)
@@ -371,8 +373,10 @@ class BamCurveFetcher:
                 curve = self._parse_curve(txt, d)
                 self._cache_path(d).write_text(txt, encoding="utf-8")
                 return d, curve
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[BAM-DIAG] {d}: HTML fallback parse failed: {e}", flush=True)
+        else:
+            print(f"[BAM-DIAG] {d}: HTML fallback fetch returned no text -> GIVING UP", flush=True)
 
         # 3) no data (do not write empty marker to avoid poisoning cache on transient failures)
         return d, None
@@ -419,16 +423,20 @@ class BamCurveFetcher:
                     if status in RETRYABLE_STATUSES:
                         if attempt < 4:
                             continue
+                        print(f"[BAM-DIAG] GET {url} -> HTTP {status} (retries exhausted)", flush=True)
                         return None
                     if status >= 400:
+                        print(f"[BAM-DIAG] GET {url} -> HTTP {status}, body[:200]={text[:200]!r}", flush=True)
                         return None
                     if _looks_like_html(text) and "/export/blockcsv/" in url:
                         # direct CSV endpoint returned HTML (not a CSV payload)
+                        print(f"[BAM-DIAG] GET {url} -> HTTP {status} but got HTML instead of CSV, body[:200]={text[:200]!r}", flush=True)
                         return None
                     return text
-            except (aiohttp.ClientError, asyncio.TimeoutError):
+            except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 if attempt < 4:
                     continue
+                print(f"[BAM-DIAG] GET {url} -> {type(e).__name__}: {e} (retries exhausted)", flush=True)
                 return None
         return None
 
