@@ -1648,7 +1648,7 @@ def _page_spread() -> None:
         if "SECTEUR" in df_oblig.columns:
             _oblig_src_cols.append("SECTEUR")
         _oblig_src_cols += ["ISSUEDT", "MATURITYDT_L"]
-        if rate_col and "Taux instrument" in df_oblig.columns:
+        if "Taux instrument" in df_oblig.columns:
             _oblig_src_cols.append("Taux instrument")
         _oblig_src_cols += ["Maturité (ans)", "Taux BDT"]
         if "Spread (bps)" in df_oblig.columns:
