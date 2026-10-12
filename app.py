@@ -537,6 +537,20 @@ def _page_home() -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE RISQUE DE CRÉDIT
 # ─────────────────────────────────────────────────────────────────────────────
+def _implied_pd(spread_bps: float, lgd: float, T: float) -> Optional[float]:
+    """PD implicite (hasard constant) a partir d'un spread de credit.
+
+    spread ~= lambda * LGD  =>  lambda = (spread/LGD) ; PD(T) = 1 - exp(-lambda*T)
+    """
+    if lgd <= 0 or T <= 0:
+        return None
+    spread_bps = max(0.0, spread_bps)  # un spread negatif resultant d'un bruit de
+    # marche ne doit jamais produire un hasard negatif.
+    lam = (spread_bps / 10_000) / lgd
+    pd_t = 1 - math.exp(-lam * T)
+    return min(max(pd_t, 0.0), 1.0)
+
+
 def _page_risque_credit() -> None:
     st.markdown("## Risque de Crédit")
     st.caption("Probabilité de défaut implicite et heatmap émetteur × maturité")
@@ -577,31 +591,88 @@ def _page_risque_credit() -> None:
     with c1:
         maturite_pd = st.selectbox("Maturité (pour la probabilité de défaut)", maturites_dispo)
     with c2:
-        taux_recouvrement = st.number_input(
-            "Taux de recouvrement", value=0.65, min_value=0.0, max_value=0.99,
+        taux_recouvrement_global = st.number_input(
+            "Taux de recouvrement par défaut", value=0.65, min_value=0.0, max_value=0.99,
             step=0.05, format="%.2f",
+            help="Utilisé pour les secteurs sans taux spécifique ci-dessous.",
         )
-    lgd = 1 - taux_recouvrement
+
+    c3, c4 = st.columns(2)
+    with c3:
+        min_n = st.number_input(
+            "Nb min. d'instruments par émetteur", value=2, min_value=1, max_value=10, step=1,
+            help="Sous ce seuil, l'échantillon est jugé trop bruité pour afficher une PD fiable.",
+        )
+    with c4:
+        liquidite_on = st.checkbox(
+            "Retrancher une prime de liquidité",
+            value=True,
+            help="Le spread rémunère aussi la liquidité, pas seulement le défaut. "
+                 "On soustrait le spread le plus bas observé sur le même type/maturité "
+                 "(proxy de l'émetteur le plus liquide) avant de calculer la PD.",
+        )
+
+    with st.expander("⚙️ Taux de recouvrement par secteur (optionnel)"):
+        secteurs_dispo = sorted(s for s in df_type["Secteur"].dropna().unique() if s)
+        lgd_par_secteur: dict[str, float] = {}
+        if not secteurs_dispo:
+            st.caption("Aucun secteur détecté dans ces données.")
+        else:
+            cols = st.columns(3)
+            for i, secteur in enumerate(secteurs_dispo):
+                with cols[i % 3]:
+                    r = st.number_input(
+                        secteur, value=taux_recouvrement_global, min_value=0.0, max_value=0.99,
+                        step=0.05, format="%.2f", key=f"rc_{asset_type}_{secteur}",
+                    )
+                    lgd_par_secteur[secteur] = 1 - r
+
+    def _lgd_for(secteur: str) -> float:
+        return lgd_par_secteur.get(secteur, 1 - taux_recouvrement_global)
 
     # ── Bloc 1 : PD implicite par émetteur ──────────────────────────────────
     _sec("📊 Probabilité de défaut implicite par émetteur")
     T = _mat_label_to_years(maturite_pd)
     df_mat = df_type[df_type["_mat"] == maturite_pd]
 
-    pd_rows = []
+    # Agrégation par médiane (plutôt que moyenne) : moins sensible aux
+    # instruments isolés à spread aberrant. Spread plancher à 0 avant agrégation.
+    agg_rows = []
     for emetteur, grp in df_mat.groupby("Emetteur"):
-        spreads = grp["Spread"].dropna()
-        if spreads.empty or lgd <= 0 or T <= 0:
+        spreads = grp["Spread"].dropna().clip(lower=0)
+        secteur = next((s for s in grp["Secteur"].dropna() if s), "")
+        if len(spreads) < min_n:
             continue
-        spread_moyen_bps = spreads.mean()
-        lam = (spread_moyen_bps / 10_000) / lgd
-        pd_t = 1 - math.exp(-lam * T)
-        pd_rows.append({"Emetteur": emetteur, "PD": pd_t, "Spread moyen (bps)": spread_moyen_bps})
+        agg_rows.append({
+            "Emetteur": emetteur,
+            "Secteur": secteur,
+            "Spread median (bps)": spreads.median(),
+            "N": len(spreads),
+        })
 
-    if not pd_rows:
-        st.info("Pas de données exploitables pour cette maturité.")
+    liq_floor = 0.0  # reste a 0 si pas assez de donnees pour ce bloc (reutilise plus bas)
+    if not agg_rows:
+        st.info(f"Pas assez de données (< {min_n} instrument(s) par émetteur) pour cette maturité.")
     else:
+        df_agg = pd.DataFrame(agg_rows)
+
+        # Prime de liquidité : spread le plus bas du groupe, pris comme proxy
+        # de l'émetteur le plus liquide (donc le moins "pollué" par la prime
+        # de liquidité). Soustrait avant le calcul de PD, jamais en dessous de 0.
+        liq_floor = df_agg["Spread median (bps)"].min() if liquidite_on and len(df_agg) > 1 else 0.0
+
+        pd_rows = []
+        for row in agg_rows:
+            spread_adj = max(0.0, row["Spread median (bps)"] - liq_floor)
+            pd_t = _implied_pd(spread_adj, _lgd_for(row["Secteur"]), T)
+            if pd_t is None:
+                continue
+            pd_rows.append({**row, "Spread ajusté (bps)": spread_adj, "PD": pd_t})
+
         df_pd = pd.DataFrame(pd_rows).sort_values("PD", ascending=False)
+        if liquidite_on and liq_floor > 0:
+            st.caption(f"Prime de liquidité retranchée : **{liq_floor:.0f} bps** "
+                       f"(spread médian le plus bas observé dans ce groupe).")
         fig_pd = go.Figure(go.Bar(
             x=df_pd["Emetteur"],
             y=df_pd["PD"] * 100,
@@ -613,6 +684,8 @@ def _page_risque_credit() -> None:
             ),
             text=[f"{v:.1f}%" for v in df_pd["PD"] * 100],
             textposition="outside",
+            customdata=df_pd["N"],
+            hovertemplate="%{x}<br>PD: %{y:.2f}%<br>N instruments: %{customdata}<extra></extra>",
         ))
         fig_pd.update_layout(
             template="plotly_dark",
@@ -624,6 +697,83 @@ def _page_risque_credit() -> None:
             height=420,
         )
         st.plotly_chart(fig_pd, use_container_width=True)
+
+    # ── Bloc 1bis : Structure par terme (hasard forward bootstrapé) ─────────
+    _sec("📐 Structure par terme de la PD — par émetteur")
+    st.caption(
+        "La PD ci-dessus suppose un hasard de défaut constant jusqu'à T. Ici, on "
+        "bootstrappe un hasard **forward** par tranche de maturité à partir de toutes "
+        "les maturités disponibles pour un émetteur, ce qui donne une estimation plus "
+        "fine (et révèle les inversions de courbe, signe de stress court terme)."
+    )
+    emetteurs_dispo = sorted(df_type["Emetteur"].dropna().unique())
+    if not emetteurs_dispo:
+        st.info("Aucun émetteur disponible.")
+    else:
+        emetteur_sel = st.selectbox("Émetteur", emetteurs_dispo, key="emetteur_terme")
+        df_em = df_type[df_type["Emetteur"] == emetteur_sel]
+
+        term_rows = []
+        for mat in sorted(df_em["_mat"].unique(), key=_mat_sort_key):
+            spreads = df_em[df_em["_mat"] == mat]["Spread"].dropna().clip(lower=0)
+            if len(spreads) < min_n:
+                continue
+            Ti = _mat_label_to_years(mat)
+            if Ti <= 0:
+                continue
+            secteur = next((s for s in df_em["Secteur"].dropna() if s), "")
+            term_rows.append({"mat": mat, "T": Ti, "spread": spreads.median(), "lgd": _lgd_for(secteur)})
+
+        term_rows.sort(key=lambda r: r["T"])
+        if len(term_rows) < 2:
+            st.info(f"Au moins 2 maturités avec ≥ {min_n} instruments sont nécessaires pour bootstrapper "
+                    f"une structure par terme ({len(term_rows)} disponible(s) pour {emetteur_sel}).")
+        else:
+            prev_T, prev_cum_haz = 0.0, 0.0
+            bootstrap_rows = []
+            inversion = False
+            for r in term_rows:
+                spread_adj = max(0.0, r["spread"] - (liq_floor if liquidite_on else 0.0))
+                cum_haz = (spread_adj / 10_000) / r["lgd"] * r["T"] if r["lgd"] > 0 else 0.0
+                dt = r["T"] - prev_T
+                fwd_haz = (cum_haz - prev_cum_haz) / dt if dt > 0 else 0.0
+                if fwd_haz < 0:
+                    inversion = True
+                    fwd_haz = 0.0
+                    cum_haz = prev_cum_haz  # on gèle le hasard cumulé plutôt que de le faire reculer
+                bootstrap_rows.append({
+                    "Maturité": r["mat"], "T": r["T"],
+                    "Hasard forward (%)": fwd_haz * 100,
+                    "PD cumulée (%)": (1 - math.exp(-cum_haz)) * 100,
+                })
+                prev_T, prev_cum_haz = r["T"], cum_haz
+
+            if inversion:
+                st.warning("⚠️ Inversion détectée dans la structure par terme (PD impliquée en baisse "
+                           "à plus longue maturité) — hasard forward plafonné à 0 sur la tranche concernée.")
+
+            df_term = pd.DataFrame(bootstrap_rows)
+            fig_term = go.Figure()
+            fig_term.add_trace(go.Bar(
+                x=df_term["Maturité"], y=df_term["Hasard forward (%)"],
+                name="Hasard forward (%)", marker_color="#E67E22", opacity=0.6,
+            ))
+            fig_term.add_trace(go.Scatter(
+                x=df_term["Maturité"], y=df_term["PD cumulée (%)"],
+                name="PD cumulée (%)", mode="lines+markers",
+                line=dict(color="#E74C3C", width=2), yaxis="y2",
+            ))
+            fig_term.update_layout(
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                yaxis=dict(title="Hasard forward (%)"),
+                yaxis2=dict(title="PD cumulée (%)", overlaying="y", side="right"),
+                legend=dict(orientation="h", y=1.1),
+                margin=dict(t=40, b=10),
+                height=380,
+            )
+            st.plotly_chart(fig_term, use_container_width=True)
 
     # ── Bloc 2 : Heatmap Émetteur × Maturité ────────────────────────────────
     _sec("🗺️ Heatmap du spread moyen — Émetteur × Maturité")
