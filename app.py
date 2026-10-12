@@ -558,6 +558,21 @@ def _page_risque_credit() -> None:
         )
         return
 
+    # Exclure les obligations déjà arrivées à échéance : les comparer à des
+    # obligations encore en vie fausse le classement du risque (ex: un spread
+    # figé en 2021 sur un titre échu en 2023 n'a plus aucun sens aujourd'hui).
+    _echeance_dt = pd.to_datetime(df_hist["DATE D'ECHEANCE"], errors="coerce")
+    _n_avant = len(df_hist)
+    df_hist = df_hist[_echeance_dt >= pd.Timestamp.today().normalize()].copy()
+    _n_echues = _n_avant - len(df_hist)
+    if _n_echues:
+        st.caption(f"ℹ️ {_n_echues} ligne(s) exclue(s) car obligation déjà arrivée à échéance "
+                   f"(seuls les titres encore en vie sont pris en compte).")
+
+    if df_hist.empty:
+        st.warning("Toutes les obligations historiques sont déjà arrivées à échéance.")
+        return
+
     types_dispo = sorted(df_hist["Type"].unique())
     asset_type = st.selectbox("Type d'actif", types_dispo)
     df_type = df_hist[df_hist["Type"] == asset_type].copy()
