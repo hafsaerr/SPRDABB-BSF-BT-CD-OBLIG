@@ -638,7 +638,6 @@ def _page_risque_credit() -> None:
     # Agrégation par médiane (plutôt que moyenne) : moins sensible aux
     # instruments isolés à spread aberrant. Spread plancher à 0 avant agrégation.
     agg_rows = []
-    n_emetteurs_total = df_mat["Emetteur"].nunique()
     for emetteur, grp in df_mat.groupby("Emetteur"):
         spreads = grp["Spread"].dropna().clip(lower=0)
         secteur = next((s for s in grp["Secteur"].dropna() if s), "")
@@ -650,14 +649,6 @@ def _page_risque_credit() -> None:
             "Spread median (bps)": spreads.median(),
             "N": len(spreads),
         })
-
-    n_exclus = n_emetteurs_total - len(agg_rows)
-    if n_exclus > 0:
-        st.caption(
-            f"ℹ️ {len(agg_rows)}/{n_emetteurs_total} émetteur(s) affiché(s) — "
-            f"{n_exclus} exclu(s) car moins de {min_n} instrument(s) à cette maturité "
-            f"(baisse le seuil ci-dessus pour les inclure, au prix d'une PD moins fiable)."
-        )
 
     liq_floor = 0.0  # reste a 0 si pas assez de donnees pour ce bloc (reutilise plus bas)
     if not agg_rows:
