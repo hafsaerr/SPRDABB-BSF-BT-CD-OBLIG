@@ -3,7 +3,7 @@
 Spread (pb) = taux facial − taux BDT à la date d'émission, pour une durée qui dépend
 du titre :
 - taux fixe, in fine            : durée jusqu'à l'échéance ;
-- taux fixe, amortissable       : durée de vie moyenne (amortissement constant) ;
+- taux fixe, amortissable       : durée jusqu'à l'échéance (maturité totale) ;
 - taux révisable                : période de révision (= périodicité du coupon) ;
 - zéro-coupon ou taux fictif    : pas de spread ;
 - bon du Trésor                 : pas de spread (c'est la courbe de référence).
@@ -55,8 +55,8 @@ def base_de_calcul(t) -> tuple[str | None, float | None, str | None]:
         jours = min(((d0 + relativedelta(months=mois)) - d0).days, (ech - d0).days)
         return f"Révisable : période de {mois} mois", jours, None
     if t.remboursement in ("Amortissable", "Par tranches"):
-        mois = R.MOIS_PAR_PERIODE.get(_code(t.frequence_amort_code) or _code(t.periodicite_code), 12)
-        return "Amortissable : vie moyenne", vie_moyenne_jours(d0, ech, mois), None
+        # Règle retenue : maturité totale, comme les titres in fine (et non la vie moyenne)
+        return f"{t.remboursement} : maturité jusqu'à l'échéance", (ech - d0).days, None
     return "Maturité jusqu'à l'échéance", (ech - d0).days, None
 
 

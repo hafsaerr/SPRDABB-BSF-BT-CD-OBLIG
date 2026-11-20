@@ -45,14 +45,18 @@ class CourbeBAM:
     points: list[tuple[date, float]]   # (échéance, taux moyen pondéré décimal), triés
 
     def maturites(self) -> tuple[list[int], list[float]]:
-        # Deux lignes de même échéance : moyenne des taux
-        par_jour: dict[int, list[float]] = {}
+        # Comme le pricer : tous les points sont gardés (même une échéance antérieure à la date de
+        # valeur) ; deux lignes de même échéance : la dernière du tableau est retenue
+        mt: list[int] = []
+        tx: list[float] = []
         for ech, t in self.points:
             j = (ech - self.date_base).days
-            if j > 0:
-                par_jour.setdefault(j, []).append(t)
-        mt = sorted(par_jour)
-        return mt, [sum(par_jour[j]) / len(par_jour[j]) for j in mt]
+            if mt and mt[-1] == j:
+                tx[-1] = t
+            else:
+                mt.append(j)
+                tx.append(t)
+        return mt, tx
 
     def to_json(self) -> dict:
         return {"format": 2, "date_valeur": self.date_base.isoformat(),

@@ -145,7 +145,7 @@ def _traiter(cle: str, nom: str, contenu: bytes, jour: date):
     return titres, coupons, rapport, courbes
 
 
-VERSION_TRAITEMENT = "2026-11-20b"  # à changer à chaque évolution du traitement : force un nouveau calcul
+VERSION_TRAITEMENT = "2026-11-20d"  # à changer à chaque évolution du traitement : force un nouveau calcul
 
 
 def charger_fichier(nom: str, contenu: bytes) -> None:

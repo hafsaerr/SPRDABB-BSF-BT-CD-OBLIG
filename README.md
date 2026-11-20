@@ -56,7 +56,7 @@ Pour chaque date d'émission :
 2. sinon la courbe publiée par Bank Al-Maghrib pour cette date (cache `data/courbes_bam/`, table
    Supabase `bdt_curves`, puis site BAM),
    interpolée comme dans le pricer : date de base = date de valeur la plus récente du tableau,
-   maturité = échéance − date de base ;
+   maturité = échéance − date de base, tous les points gardés, même échéance : dernière ligne ;
 3. si BAM n'a rien publié (week-end, jour férié), jour ouvré précédent, jusqu'à 10 jours.
 
 Le site de BAM refuse les connexions venant de Streamlit Cloud (HTTP 403) : l'application en ligne lit
@@ -73,7 +73,7 @@ Spread (pb) = taux facial − taux BDT de la courbe de la date d'émission, pour
 | Titre | Durée de référence |
 |---|---|
 | Taux fixe, in fine | de l'émission à l'échéance |
-| Taux fixe, amortissable | durée de vie moyenne (remboursement par parts égales) |
+| Taux fixe, amortissable ou par tranches | de l'émission à l'échéance (maturité totale) |
 | Taux révisable | période de révision (= périodicité du coupon) |
 | CD, BSF, BT | de l'émission à l'échéance (taux monétaire sous un an) ; période de révision si révisable |
 | Zéro-coupon, taux fictif | pas de spread |
