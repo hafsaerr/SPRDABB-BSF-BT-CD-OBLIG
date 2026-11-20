@@ -1,7 +1,6 @@
 """Éléments partagés par les pages : style, données de la session, fiche d'un titre."""
 from __future__ import annotations
 
-import base64
 import hashlib
 from datetime import date
 from pathlib import Path
@@ -73,9 +72,7 @@ def kpis(items: list[tuple[str, str, str]]) -> None:
 
 
 def logo_html() -> str:
-    p = RACINE / "assets" / "ALBARID.png"
-    img = f'<img src="data:image/png;base64,{base64.b64encode(p.read_bytes()).decode()}">' if p.exists() else ""
-    return f'<div class="marque">{img}<div><b>SpreadABB</b><span>Marché obligataire</span></div></div>'
+    return '<div class="marque"><div><b>SpreadABB</b><span>Marché obligataire</span></div></div>'
 
 
 def couleur(v, i=0) -> str:
@@ -128,7 +125,8 @@ def _traiter(cle: str, nom: str, contenu: bytes, jour: date):
     courbes = Courbes(historique(), bam)
     dates = {t.date_emission for t in titres.itertuples() if spreads.base_de_calcul(t)[2] is None}
     # Site BAM interrogé pour les titres en vie ; les échus se contentent de l'historique et du cache
-    courbes.preparer(dates, en_ligne=set(titres.loc[titres["en_vie"], "date_emission"]))
+    courbes.preparer(dates, en_ligne=set(titres.loc[titres["en_vie"], "date_emission"]), delai_site=45)
+    bam.limite = None
     titres = titres.merge(spreads.calculer(titres, courbes), on="isin", how="left")
     rapport["courbes"] = {
         "historique": int((titres["source_courbe"] == "Historique").sum()),

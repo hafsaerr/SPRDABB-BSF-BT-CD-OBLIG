@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import io
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -127,8 +128,11 @@ class Courbes:
         self._cache[d] = res
         return res
 
-    def preparer(self, dates, en_ligne: set | None = None, progression=None) -> None:
-        """Résout un lot de dates ; le site BAM n'est appelé que pour les dates de `en_ligne`."""
+    def preparer(self, dates, en_ligne: set | None = None, progression=None, delai_site: float | None = None) -> None:
+        """Résout un lot de dates ; le site BAM n'est appelé que pour les dates de `en_ligne`,
+        et pendant `delai_site` secondes au plus."""
+        if self.bam is not None and delai_site is not None:
+            self.bam.limite = time.time() + delai_site
         dates = sorted(set(dates) - set(self._cache))
         if self.bam is not None:
             hors = [c for d in dates for c in self._candidats(d) if c not in self.dates_histo]

@@ -143,7 +143,11 @@ class _Supabase:
         if ids:
             try:
                 from supabase import create_client
-                self.client = create_client(*ids)
+                try:
+                    from supabase import ClientOptions
+                    self.client = create_client(*ids, options=ClientOptions(postgrest_client_timeout=15))
+                except ImportError:
+                    self.client = create_client(*ids)
             except Exception as e:
                 print(f"[BAM-DIAG] Supabase indisponible : {e}", flush=True)
 
@@ -184,8 +188,10 @@ class SourceBAM:
         self.bloque: str | None = None    # motif si le site refuse la connexion
         self.telechargees = 0
         self.echecs = 0
+        self.limite: float | None = None  # heure au-delà de laquelle le site n'est plus interrogé
+        self._vus: set[date] = set()      # dates déjà cherchées sur le disque et dans Supabase
         self._verrou = threading.Lock()
-        DOSSIER_CACHE.mkdir(exist_ok=True)
+        DOSSIER_CACHE.mkdir(parents=True, exist_ok=True)
 
     def _disque(self, d: date) -> Path:
         return DOSSIER_CACHE / f"{d.isoformat()}.json"
@@ -194,8 +200,9 @@ class SourceBAM:
         """Lit en une fois le disque et Supabase pour une liste de dates."""
         manque = []
         for d in dates:
-            if d in self.memoire:
+            if d in self.memoire or d in self._vus:
                 continue
+            self._vus.add(d)
             f = self._disque(d)
             if f.exists():
                 try:
@@ -210,14 +217,16 @@ class SourceBAM:
                 self._disque(d).write_text(json.dumps(js), "utf-8")
 
     def courbe(self, d: date) -> CourbeBAM | None:
-        if d not in self.memoire:
+        if d not in self.memoire and d not in self._vus:
             self.precharger([d])
         if d in self.memoire:
             return CourbeBAM.from_json(d, self.memoire[d])
         if not self.en_ligne or self.bloque:
             return None
+        if self.limite is not None and time.time() > self.limite:
+            return None
         try:
-            c = telecharger(d)
+            c = telecharger(d, timeout=10, essais=2)
         except SiteInjoignable as e:
             self.bloque = str(e)
             return None
@@ -225,7 +234,7 @@ class SourceBAM:
             with self._verrou:
                 self.echecs += 1
                 # Trop d'échecs successifs : on considère le site injoignable pour cette session
-                if self.echecs >= 5:
+                if self.echecs >= 3:
                     self.bloque = "le site ne répond pas"
             return None
         self.echecs = 0

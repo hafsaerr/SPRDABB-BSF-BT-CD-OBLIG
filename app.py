@@ -5,7 +5,7 @@ import streamlit as st
 
 from vues.commun import CSS, charger_fichier, logo_html
 
-st.set_page_config(page_title="SpreadABB", page_icon="assets/ALBARID.png", layout="wide")
+st.set_page_config(page_title="SpreadABB", page_icon=":material/insights:", layout="wide")
 st.markdown(CSS, unsafe_allow_html=True)
 
 
