@@ -8,6 +8,16 @@ from spreadabb import export
 from spreadabb.maroclear import ordre_tranche
 from vues.commun import couleur, entete, exiger_titres, fiche, kpis, mise_en_page, nb, titres
 
+@st.cache_data(show_spinner=False, max_entries=20)
+def _xlsx_oblig(df: pd.DataFrame) -> bytes:
+    return export.classeur_obligations(df)
+
+
+@st.cache_data(show_spinner=False, max_entries=20)
+def _xlsx_tcn(df: pd.DataFrame) -> bytes:
+    return export.classeur_tcn(df)
+
+
 entete("Spreads d'émission",
        "Taux facial − taux BDT à la date d'émission, selon la nature de chaque titre. Aucune borne n'est appliquée.")
 exiger_titres()
@@ -111,10 +121,24 @@ with st.container(border=True):
     st.dataframe(tab, width="stretch")
 
 with st.container(border=True):
-    a, b = st.columns([3, 1])
-    a.markdown("**Détail** · cliquer sur une ligne pour la fiche du titre")
-    b.download_button("Exporter en Excel", export.classeur(L), f"Spreads_{date.today():%Y%m%d}.xlsx",
-                      width="stretch", type="primary", icon=":material/download:")
+    if choix == "Obligations":
+        a, b = st.columns([3, 1])
+        a.markdown("**Détail** · cliquer sur une ligne pour la fiche du titre")
+        b.download_button("Exporter en Excel", _xlsx_oblig(L),
+                          f"Spreads_obligations_{date.today():%Y%m%d}.xlsx", width="stretch", type="primary",
+                          icon=":material/download:", help="Par secteur, puis par mode de remboursement")
+    else:
+        a, b, c = st.columns([2, 1, 1])
+        a.markdown("**Détail** · cliquer sur une ligne pour la fiche du titre")
+        b.download_button(f"Exporter les {choix}", _xlsx_tcn(L),
+                          f"Spreads_{choix}_{date.today():%Y%m%d}.xlsx", width="stretch",
+                          icon=":material/download:", help="Sélection affichée, avec les filtres")
+        tcn = titres(tous)
+        b_tcn = tcn[tcn["famille"].eq("TCN")]
+        c.download_button("Exporter tous les TCN", _xlsx_tcn(b_tcn),
+                          f"Spreads_CD_BSF_BT_{date.today():%Y%m%d}.xlsx", width="stretch", type="primary",
+                          icon=":material/download:",
+                          help="CD par émetteur, BSF crédit à la consommation et leasing, BT")
     col = ["isin", "libelle", "instrument", "nature", "type_taux", "remboursement", "emetteur", "date_emission",
            "date_echeance", "tranche_maturite", "methode", "duree_reference_ans", "taux_facial", "taux_bdt",
            "spread_pb", "source_courbe"]
