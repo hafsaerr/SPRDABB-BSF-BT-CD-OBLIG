@@ -74,6 +74,20 @@ if L.empty:
     st.info("Aucun titre pour ces filtres.")
     st.stop()
 
+if choix == "Obligations":
+    _, b = st.columns([3, 1])
+    b.download_button("Exporter en Excel", _xlsx_oblig(L), f"Spreads_obligations_{date.today():%Y%m%d}.xlsx",
+                      width="stretch", type="primary", icon=":material/download:",
+                      help="Toutes les obligations, puis par secteur et mode de remboursement (filtres appliqués)")
+else:
+    _, b, c = st.columns([2, 1, 1])
+    b.download_button(f"Exporter les {choix}", _xlsx_tcn(L), f"Spreads_{choix}_{date.today():%Y%m%d}.xlsx",
+                      width="stretch", icon=":material/download:", help="Sélection affichée, filtres appliqués")
+    tcn = titres(tous)
+    c.download_button("Exporter tous les TCN", _xlsx_tcn(tcn[tcn["famille"].eq("TCN")]),
+                      f"Spreads_CD_BSF_BT_{date.today():%Y%m%d}.xlsx", width="stretch", type="primary",
+                      icon=":material/download:", help="CD par émetteur, BSF crédit à la consommation et leasing, BT")
+
 g, d = st.columns(2)
 with g.container(border=True):
     a, b = st.columns([1, 1])
@@ -121,24 +135,7 @@ with st.container(border=True):
     st.dataframe(tab, width="stretch")
 
 with st.container(border=True):
-    if choix == "Obligations":
-        a, b = st.columns([3, 1])
-        a.markdown("**Détail** · cliquer sur une ligne pour la fiche du titre")
-        b.download_button("Exporter en Excel", _xlsx_oblig(L),
-                          f"Spreads_obligations_{date.today():%Y%m%d}.xlsx", width="stretch", type="primary",
-                          icon=":material/download:", help="Par secteur, puis par mode de remboursement")
-    else:
-        a, b, c = st.columns([2, 1, 1])
-        a.markdown("**Détail** · cliquer sur une ligne pour la fiche du titre")
-        b.download_button(f"Exporter les {choix}", _xlsx_tcn(L),
-                          f"Spreads_{choix}_{date.today():%Y%m%d}.xlsx", width="stretch",
-                          icon=":material/download:", help="Sélection affichée, avec les filtres")
-        tcn = titres(tous)
-        b_tcn = tcn[tcn["famille"].eq("TCN")]
-        c.download_button("Exporter tous les TCN", _xlsx_tcn(b_tcn),
-                          f"Spreads_CD_BSF_BT_{date.today():%Y%m%d}.xlsx", width="stretch", type="primary",
-                          icon=":material/download:",
-                          help="CD par émetteur, BSF crédit à la consommation et leasing, BT")
+    st.markdown("**Détail** · cliquer sur une ligne pour la fiche du titre")
     col = ["isin", "libelle", "instrument", "nature", "type_taux", "remboursement", "emetteur", "date_emission",
            "date_echeance", "tranche_maturite", "methode", "duree_reference_ans", "taux_facial", "taux_bdt",
            "spread_pb", "source_courbe"]

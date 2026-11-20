@@ -266,7 +266,9 @@ def ordre_tranche(t: str | None) -> float:
     if not t:
         return 1e9
     n = int(re.match(r"\d+", t).group())
-    return n * 7 / 365 if "semaine" in t else float(n)
+    if "semaine" in t:
+        return n * 7 / 365
+    return n / 12 if "mois" in t else float(n)
 
 
 def prochaine_date(debut: date, mois: int, apres: date, fin: date | None) -> date | None:

@@ -55,6 +55,10 @@ h1 { letter-spacing:-.02em; font-weight:700; }
 .calcul { background:#f6f4f1; border-radius:12px; padding:14px 16px; margin-bottom:14px; }
 .calcul .grand { font-size:30px; font-weight:700; letter-spacing:-.02em; }
 .calcul p { margin:2px 0 0; color:var(--doux); font-size:13px; }
+/* Téléchargement CSV brut des tableaux masqué : les boutons « Exporter en Excel » le remplacent */
+[data-testid="stElementToolbarButton"]:has(button[aria-label*="CSV" i]),
+[data-testid="stElementToolbarButton"]:has(button[aria-label*="Download" i]),
+[data-testid="stElementToolbarButton"]:has(button[aria-label*="Télécharger" i]) { display:none; }
 </style>
 """
 

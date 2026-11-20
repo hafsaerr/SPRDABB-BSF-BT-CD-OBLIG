@@ -18,9 +18,13 @@ from openpyxl.utils import get_column_letter
 
 from .maroclear import ordre_tranche
 
-BLEU = PatternFill("solid", start_color="12355B")
+BLEU = PatternFill("solid", start_color="1F3864")      # en-têtes des obligations
 ORANGE = PatternFill("solid", start_color="C8501E")
-JAUNE = PatternFill("solid", start_color="FFE680")
+JAUNE = PatternFill("solid", start_color="FFFF00")
+GRIS_TCN = PatternFill("solid", start_color="D9D9D9")
+BLEU_CLAIR = PatternFill("solid", start_color="DCE6F1")
+SURLIGNEES = {"taux_facial", "taux_bdt", "spread_pb"}  # colonnes surlignées en jaune dans les TCN
+TRANCHES_TCN = {"13 semaines": "3 mois", "26 semaines": "6 mois", "52 semaines": "1 an"}
 GRIS = PatternFill("solid", start_color="EEF1F5")
 BLANC_GRAS = Font(bold=True, color="FFFFFF")
 GRAS = Font(bold=True)
@@ -111,11 +115,15 @@ def _largeurs(ws, mini=10, maxi=48):
         ws.column_dimensions[get_column_letter(j)].width = min(max(mini, long + 2), maxi)
 
 
-def _tableau(ws, df: pd.DataFrame, colonnes: list[str], ligne: int = 1) -> int:
-    """Tableau de détail ; renvoie la dernière ligne écrite."""
+def _tableau(ws, df: pd.DataFrame, colonnes: list[str], ligne: int = 1, style: str = "oblig") -> int:
+    """Tableau de détail ; renvoie la dernière ligne écrite.
+    style « oblig » : en-tête bleu marine ; « tcn » : en-tête jaune, lignes grises, taux et spread surlignés."""
     colonnes = [c for c in colonnes if c in df.columns]
     for j, c in enumerate(colonnes, 1):
-        _cellule(ws, ligne, j, COLONNES.get(c, c), BLEU, BLANC_GRAS)
+        if style == "tcn":
+            _cellule(ws, ligne, j, COLONNES.get(c, c).upper(), JAUNE, GRAS)
+        else:
+            _cellule(ws, ligne, j, COLONNES.get(c, c).upper(), BLEU, BLANC_GRAS)
     ws.row_dimensions[ligne].height = 32
     for i, t in enumerate(df[colonnes].itertuples(index=False), ligne + 1):
         for j, (c, v) in enumerate(zip(colonnes, t), 1):
@@ -123,7 +131,11 @@ def _tableau(ws, df: pd.DataFrame, colonnes: list[str], ligne: int = 1) -> int:
                 v = float(v)
             if c in ("emetteur",):
                 v = NOMS_COURTS.get(v, v)
-            _cellule(ws, i, j, v, GRIS if i % 2 else None, fmt=FORMATS.get(c))
+            if style == "tcn":
+                fond = JAUNE if c in SURLIGNEES else GRIS_TCN
+            else:
+                fond = GRIS if i % 2 else None
+            _cellule(ws, i, j, v, fond, GRAS if c == "spread_pb" else None, fmt=FORMATS.get(c))
     if ligne == 1:
         ws.freeze_panes = "C2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(colonnes))}{max(2, len(df) + 1)}"
@@ -167,14 +179,14 @@ def _croise(ws, df: pd.DataFrame, lignes: str, colonnes: str, titre: str, ligne:
 
 def _resume_maturite(ws, df: pd.DataFrame, ligne: int) -> None:
     """Sous un détail : moyenne, max et min des spreads par tranche de maturité."""
-    for j, h in enumerate(["Maturité", "Nombre", "Spread moyen", "Spread max", "Spread min"], 1):
-        _cellule(ws, ligne, j, h, BLEU, BLANC_GRAS)
+    for j, h in enumerate(["MATURITÉ", "NOMBRE", "MOYENNE SPREAD", "SPREAD MAX", "SPREAD MIN"], 1):
+        _cellule(ws, ligne, j, h, BLEU_CLAIR, GRAS)
     g = df.groupby("tranche_maturite")["spread_pb"].agg(["count", "mean", "max", "min"])
     for i, tr in enumerate(_tranches(df), ligne + 1):
-        _cellule(ws, i, 1, tr, police=GRAS)
-        _cellule(ws, i, 2, int(g.loc[tr, "count"]))
+        _cellule(ws, i, 1, tr, GRIS_TCN, GRAS)
+        _cellule(ws, i, 2, int(g.loc[tr, "count"]), GRIS_TCN)
         for j, k in enumerate(["mean", "max", "min"], 3):
-            _cellule(ws, i, j, round(float(g.loc[tr, k]), 1), GRIS, fmt=FORMAT_PB)
+            _cellule(ws, i, j, round(float(g.loc[tr, k]), 1), GRIS_TCN, fmt=FORMAT_PB)
 
 
 def _avec_spread(df: pd.DataFrame) -> pd.DataFrame:
@@ -234,7 +246,7 @@ def _groupe_tcn(cl: _Classeur, df: pd.DataFrame, prefixe: str, titre: str) -> No
     _largeurs(ws, mini=12)
     for em, d in df.groupby("emetteur"):
         ws = cl.feuille(f"{prefixe} {NOMS_COURTS.get(em, em)}")
-        fin = _tableau(ws, d, DETAIL_TCN)
+        fin = _tableau(ws, d, DETAIL_TCN, style="tcn")
         _resume_maturite(ws, d, fin + 3)
         _largeurs(ws)
 
@@ -242,6 +254,7 @@ def _groupe_tcn(cl: _Classeur, df: pd.DataFrame, prefixe: str, titre: str) -> No
 def classeur_tcn(df: pd.DataFrame) -> bytes:
     cl = _Classeur()
     df = _avec_spread(df)
+    df = df.assign(tranche_maturite=df["tranche_maturite"].replace(TRANCHES_TCN))
     _groupe_tcn(cl, df[df["instrument"] == "CD"], "CD", "CERTIFICATS DE DÉPÔT")
     bsf = df[df["instrument"] == "BSF"]
     if len(bsf):
@@ -251,6 +264,45 @@ def classeur_tcn(df: pd.DataFrame) -> bytes:
         _groupe_tcn(cl, bsf[bsf["groupe"] == "Leasing"], "BSF LEASING", "BSF LEASING")
         _groupe_tcn(cl, bsf[bsf["groupe"] == "Autres sociétés de financement"], "BSF AUTRES", "BSF AUTRES")
     _groupe_tcn(cl, df[df["instrument"] == "BT"], "BT", "BILLETS DE TRÉSORERIE")
+    return cl.octets()
+
+
+COLONNES.update({"mnemonique": "Mnémonique", "periodicite": "Périodicité du coupon", "statut": "Statut",
+                 "maturite_residuelle_ans": "Maturité résiduelle (ans)", "coupons_restants": "Coupons restants",
+                 "nominal": "Nominal (MAD)", "montant_emis": "Montant émis (MAD)", "anomalies": "Anomalies",
+                 "domiciliataire": "Domiciliataire", "frequence_amort": "Fréquence d'amortissement"})
+FORMATS.update({"maturite_residuelle_ans": "0.00", "nominal": "#,##0", "montant_emis": "#,##0"})
+DETAIL_TITRES = ["isin", "mnemonique", "libelle", "instrument", "nature", "type_taux", "remboursement",
+                 "frequence_amort", "emetteur", "secteur", "domiciliataire", "date_emission", "date_echeance",
+                 "maturite_initiale_ans", "maturite_residuelle_ans", "tranche_maturite", "taux_facial", "periodicite",
+                 "prochain_coupon", "prochaine_revision", "coupons_restants", "nominal", "montant_emis", "encours",
+                 "taux_bdt", "spread_pb", "statut", "anomalies"]
+
+
+def classeur_titres(df: pd.DataFrame) -> bytes:
+    """Univers des titres : une feuille pour tous, puis une par famille et une synthèse."""
+    cl = _Classeur()
+    df = df.sort_values(["famille", "instrument", "emetteur", "date_echeance"])
+    ws = cl.feuille("Synthèse")
+    g = df.groupby(["famille", "instrument", "type_taux", "remboursement"], dropna=False).agg(
+        titres=("isin", "count"), encours=("encours", "sum"), spread=("spread_pb", "mean")).reset_index()
+    for j, h in enumerate(["FAMILLE", "INSTRUMENT", "TYPE DE TAUX", "REMBOURSEMENT", "TITRES", "ENCOURS (MAD)",
+                           "SPREAD MOYEN"], 1):
+        _cellule(ws, 1, j, h, BLEU, BLANC_GRAS)
+    for i, t in enumerate(g.itertuples(index=False), 2):
+        for j, v in enumerate(t, 1):
+            _cellule(ws, i, j, None if j == 7 and pd.isna(v) else v, GRIS if i % 2 else None,
+                     fmt={6: "#,##0", 7: FORMAT_PB}.get(j))
+    _largeurs(ws)
+    ws = cl.feuille("Tous les titres")
+    _tableau(ws, df, DETAIL_TITRES)
+    _largeurs(ws)
+    for fam in ["Obligations", "TCN", "Trésor"]:
+        d = df[df["famille"] == fam]
+        if len(d):
+            ws = cl.feuille(fam)
+            _tableau(ws, d, DETAIL_TITRES)
+            _largeurs(ws)
     return cl.octets()
 
 

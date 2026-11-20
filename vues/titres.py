@@ -1,6 +1,16 @@
+from datetime import date
+
+import pandas as pd
 import streamlit as st
 
+from spreadabb import export
 from vues.commun import entete, exiger_titres, fiche, titres
+
+
+@st.cache_data(show_spinner=False, max_entries=10)
+def _xlsx(df: pd.DataFrame) -> bytes:
+    return export.classeur_titres(df)
+
 
 entete("Univers des titres",
        "Référentiel Maroclear nettoyé : nature, type de taux, remboursement, coupons et révisions. "
@@ -26,7 +36,11 @@ if q:
     m = t[["isin", "libelle", "emetteur", "secteur"]].fillna("").apply(lambda c: c.str.contains(q, case=False, regex=False))
     t = t[m.any(axis=1)]
 
-st.caption(f"{len(t):,} titres".replace(",", " "))
+a, b = st.columns([3, 1])
+a.caption(f"{len(t):,} titres".replace(",", " "))
+b.download_button("Exporter en Excel", _xlsx(t), f"Univers_des_titres_{date.today():%Y%m%d}.xlsx",
+                  width="stretch", type="primary", icon=":material/download:",
+                  help="Synthèse, tous les titres, puis une feuille par famille (sélection affichée)")
 colonnes = ["isin", "libelle", "instrument", "nature", "type_taux", "remboursement", "emetteur", "secteur",
             "date_emission", "date_echeance", "maturite_residuelle_ans", "taux_facial", "periodicite",
             "prochain_coupon", "prochaine_revision", "spread_pb", "statut", "anomalies"]
