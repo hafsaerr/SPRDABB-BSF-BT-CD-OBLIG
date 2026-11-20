@@ -1,34 +1,8 @@
-# Secrets Streamlit — NE PAS PUSHER
-.streamlit/secrets.toml
-
-# Cache BAM curves
-cache_bam_curves/*.csv
-cache_bam_curves/*.json
-cache_bam_curves/*.pkl
-cache/*.csv
-cache/*.json
-cache/*.pkl
-
-# Python
 __pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-*.egg-info/
-dist/
-build/
-
-# Environnement
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
+cache_bam_curves/
+*.zip
+*.xml
 .env
-.venv
-venv/
-env/
-
-# IDE
-.vscode/
-.idea/
-*.swp
-
-# OS
-.DS_Store
-Thumbs.db

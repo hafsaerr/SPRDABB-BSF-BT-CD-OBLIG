@@ -1,88 +1,83 @@
-"""
-sync_bdt_curves.py — Pré-remplit le cache Supabase des courbes BDT BAM.
+"""Complète le cache Supabase des courbes BAM depuis un poste qui accède au site de Bank Al-Maghrib.
 
-bkam.ma bloque (HTTP 403) les requêtes venant des IP datacenter de
-Streamlit Community Cloud. L'app déployée ne peut donc jamais scraper
-bkam.ma elle-même : elle ne peut lire que ce qui est déjà en cache
-Supabase. Ce script fait le scraping depuis une machine non bloquée
-(ta machine) et remplit Supabase à l'avance — l'app Cloud n'a ensuite
-plus qu'à lire les courbes déjà en base.
+Le site de BAM refuse les connexions venant des serveurs d'hébergement : l'application en ligne
+lit donc les courbes déjà enregistrées dans Supabase. Ce script télécharge les dates absentes de
+l'historique des taux (dates d'émission du fichier Maroclear, ou une période) et les enregistre.
 
-Usage :
-    python sync_bdt_curves.py --maroclear chemin/vers/fichier.xlsx --sheet OBL_ORDN
-    python sync_bdt_curves.py --start 2010-01-01 --end 2026-12-31
-
-À relancer périodiquement (ou à chaque nouveau fichier Maroclear) pour
-couvrir les nouvelles dates d'émission. Les dates déjà en cache (local
-ou Supabase) sont sautées automatiquement — le script est sûr à
-interrompre et relancer.
+Exemples :
+    python sync_bdt_curves.py --maroclear REPV_0001_ALL_13112026.zip
+    python sync_bdt_curves.py --du 2008-01-01 --au 2014-12-31
+Identifiants : .streamlit/secrets.toml ([supabase] url, key) ou variables SUPABASE_URL / SUPABASE_KEY.
 """
 from __future__ import annotations
 
 import argparse
-import sys
+import os
+import time
+import tomllib
 from datetime import date, timedelta
+from pathlib import Path
 
-import pandas as pd
+from spreadabb import maroclear, spreads
+from spreadabb.bam import SiteInjoignable, SourceBAM, jour_ouvre
+from spreadabb.courbe import Courbes, historique_du_depot
 
-from bam_curve_fetcher import BamCurveFetcher
-
-
-def _business_days(start: date, end: date) -> list[date]:
-    days = []
-    d = start
-    while d <= end:
-        if d.weekday() < 5:  # Mon-Fri
-            days.append(d)
-        d += timedelta(days=1)
-    return days
+PAUSE_TOUS_LES = 150   # le site coupe après quelques centaines de requêtes
+PAUSE_SECONDES = 10
 
 
-def _dates_from_maroclear(path: str, sheet: str) -> list[date]:
-    df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
-    if "ISSUEDT" not in df.columns:
-        sys.exit(f"Colonne ISSUEDT introuvable dans la feuille '{sheet}'. "
-                  f"Colonnes disponibles : {list(df.columns)}")
-    dts = pd.to_datetime(df["ISSUEDT"], errors="coerce").dropna().dt.date
-    return sorted(set(dts))
+def _identifiants() -> None:
+    f = Path(__file__).parent / ".streamlit" / "secrets.toml"
+    if not os.environ.get("SUPABASE_URL") and f.exists():
+        s = tomllib.loads(f.read_text("utf-8")).get("supabase", {})
+        os.environ.setdefault("SUPABASE_URL", s.get("url", ""))
+        os.environ.setdefault("SUPABASE_KEY", s.get("key", ""))
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--maroclear", help="Fichier Maroclear .xlsx : ne synchronise que les dates ISSUEDT qu'il contient")
-    p.add_argument("--sheet", default="OBL_ORDN", help="Nom de la feuille à lire (défaut: OBL_ORDN)")
-    p.add_argument("--start", help="Date de début (YYYY-MM-DD) — synchronise tous les jours ouvrés de la période")
-    p.add_argument("--end", help="Date de fin (YYYY-MM-DD), défaut: aujourd'hui")
-    p.add_argument("--workers", type=int, default=10, help="Requêtes parallèles (défaut: 10)")
-    args = p.parse_args()
+    p.add_argument("--maroclear", help="fichier REPV_….zip : dates d'émission des titres")
+    p.add_argument("--tous", action="store_true", help="avec --maroclear : inclure les titres échus")
+    p.add_argument("--du", type=date.fromisoformat)
+    p.add_argument("--au", type=date.fromisoformat)
+    a = p.parse_args()
+    _identifiants()
 
-    if args.maroclear:
-        dates = _dates_from_maroclear(args.maroclear, args.sheet)
-    elif args.start:
-        start = date.fromisoformat(args.start)
-        end = date.fromisoformat(args.end) if args.end else date.today()
-        dates = _business_days(start, end)
+    if a.maroclear:
+        titres, _, _ = maroclear.charger(Path(a.maroclear).name, Path(a.maroclear).read_bytes())
+        if not a.tous:
+            titres = titres[titres["en_vie"]]
+        dates = {t.date_emission for t in titres.itertuples() if spreads.base_de_calcul(t)[2] is None}
+    elif a.du and a.au:
+        dates, d = set(), a.du
+        while d <= a.au:
+            if d.weekday() < 5:
+                dates.add(d)
+            d += timedelta(days=1)
     else:
-        p.error("Fournis soit --maroclear <fichier.xlsx>, soit --start (et optionnellement --end).")
-        return
+        p.error("indiquer --maroclear ou --du et --au")
 
-    print(f"{len(dates)} dates uniques a synchroniser "
-          f"({dates[0]} -> {dates[-1]}).")
-
-    fetcher = BamCurveFetcher(cache_dir="cache_bam_curves")
-
-    def progress(done, total, n_cache, n_net, eta):
-        print(f"\r  {done}/{total}  (cache: {n_cache} | reseau: {n_net})  ETA {eta:.0f}s   ", end="", flush=True)
-
-    results = fetcher.get_curves_parallel(dates, max_workers=args.workers, progress_callback=progress)
-    print()
-
-    ok = sum(1 for v in results.values() if v)
-    fail = sorted(d for d, v in results.items() if not v)
-    print(f"\n[OK] {ok}/{len(dates)} courbes disponibles (cache local + Supabase).")
-    if fail:
-        print(f"[MANQUANT] {len(fail)} dates sans courbe BAM (jours feries/non ouvres probablement) :")
-        print(", ".join(d.isoformat() for d in fail[:30]) + (" ..." if len(fail) > 30 else ""))
+    bam = SourceBAM()
+    if bam.supabase.client is None:
+        print("Supabase non configuré : les courbes sont enregistrées dans data/courbes_bam/ "
+              "(à envoyer sur GitHub pour que l'application en ligne les utilise).")
+    courbes = Courbes(historique_du_depot(), bam)
+    a_chercher = sorted(d for d in dates if jour_ouvre(d) not in courbes.dates_histo)
+    print(f"{len(dates)} dates, dont {len(a_chercher)} absentes de l'historique")
+    bam.precharger(a_chercher)
+    for i, d in enumerate(a_chercher, 1):
+        if i % PAUSE_TOUS_LES == 0:
+            time.sleep(PAUSE_SECONDES)
+        try:
+            c = courbes.courbe(d)
+        except SiteInjoignable as e:
+            print(f"Site BAM injoignable : {e}")
+            break
+        if bam.bloque:
+            print(f"Site BAM injoignable : {bam.bloque}")
+            break
+        print(f"[{i}/{len(a_chercher)}] {d} -> " + (f"courbe du {c.date_courbe} ({c.source})" if c else "aucune courbe"))
+    print(f"Terminé : {bam.telechargees} page(s) téléchargée(s).")
 
 
 if __name__ == "__main__":
