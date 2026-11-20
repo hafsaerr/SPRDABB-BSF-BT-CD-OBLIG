@@ -1,127 +1,80 @@
-<<<<<<< HEAD
-# SpreadABB — Spread Manager · Al Barid Bank
+# SpreadABB
 
-Application Streamlit de calcul de spread taux pour les instruments du marché obligataire marocain (BSF, CD, BT, Obligations) contre la courbe BDT de Bank Al-Maghrib.
+Application Streamlit de calcul des **spreads d'émission** des titres de dette marocains (CD, BSF, BT, BDT,
+obligations ordinaires, subordonnées, perpétuelles, convertibles, titrisations) contre la courbe des taux
+BDT de Bank Al-Maghrib.
 
----
-
-## Fonctionnalités
-
-- **CD** (Certificats de Dépôt) et **BSF** (Bons de Sociétés Financières) — `INSTRCTGRY = TCN`
-- **BT** (Billets de Trésorerie) — `INSTRCTGRY = BDT`
-- **OBLIG_ORDN** (Obligations Ordinaires hors secteur bancaire) — `INSTRCTGRY = OBL_ORDN`
-- Récupération automatique des courbes BDT depuis [bkam.ma](https://www.bkam.ma) avec cache local
-- Interpolation selon la logique VBA officielle BAM
-- Détection automatique du secteur (ENERGIE, TRANSPORT, IMMOBILIER…)
-- Export Excel structuré : feuilles par type/banque (CD/BSF/BT) ou par secteur (OBLIG_ORDN)
-
----
-
-## Installation locale
+## Lancement local
 
 ```bash
-git clone https://github.com/<votre-org>/spreadABB.git
-cd spreadABB
 pip install -r requirements.txt
-py -m streamlit run app.py
+streamlit run app.py
 ```
 
-L'application sera accessible sur **http://localhost:8501**.
-
-### Authentification locale
-
-Créez `.streamlit/secrets.toml` (non commité) :
+Secrets (`.streamlit/secrets.toml`, jamais commité) :
 
 ```toml
-USERNAME = "spreadABB"
-PASSWORD = "albarid2026"
+USERNAME = "..."
+PASSWORD = "..."
+
+[supabase]
+url = "https://xxxx.supabase.co"
+key = "..."
 ```
 
----
-
-## Déploiement sur Streamlit Cloud
-
-1. Poussez le repo sur GitHub
-2. Connectez-vous sur [share.streamlit.io](https://share.streamlit.io)
-3. Nouveau déploiement → sélectionnez le repo + branche + fichier : `app.py`
-4. Dans **Secrets**, ajoutez :
-   ```toml
-   USERNAME = "spreadABB"
-   PASSWORD = "albarid2026"
-   ```
-5. Déployez
-
----
-
-## Structure du projet
+## Organisation
 
 ```
-spread_manager/
-├── app.py                        # Point d'entrée Streamlit (login + navigation)
-├── pages/
-│   ├── 01_Accueil.py             # Page d'accueil (multi-page Streamlit)
-│   └── 02_Calculateur_Spread.py  # Page calculateur
-├── core/
-│   ├── bam_curve_fetcher.py      # Re-export BamCurveFetcher
-│   ├── spread_calculator.py      # Re-export calcul_taux
-│   ├── sector_mapper.py          # SECTEUR_MAP + detect_sector
-│   └── excel_exporter.py         # Fonctions export Excel pures
-├── bam_curve_fetcher.py          # Scraping BAM + cache async
-├── vba_equivalent_rates.py       # Interpolation taux (logique VBA BAM)
-├── maroclear_reader.py           # Lecture/filtrage fichier Maroclear
-├── assets/
-│   └── ALBARID.png               # Logo Al Barid Bank
-├── cache_bam_curves/             # Cache des courbes BDT (auto-créé)
-├── cache/
-│   └── .gitkeep
-├── requirements.txt
-├── .streamlit/
-│   ├── config.toml               # Thème (orange/noir)
-│   └── secrets.toml              # Credentials (NE PAS COMMITER)
-└── .gitignore
+app.py                 connexion, navigation, dépôt du fichier Maroclear
+vues/                  pages : tableau de bord, univers des titres, spreads, courbe, risque, import
+spreadabb/
+  maroclear.py         lecture du REPV_*.zip / .xml, nettoyage, renommage, classement des titres
+  referentiels.py      libellés des codes Maroclear, secteurs, émetteurs bancaires
+  courbe.py            courbe d'une date : historique des taux, sinon site de Bank Al-Maghrib
+  bam.py               téléchargement de la courbe BAM et cache (disque + table Supabase bdt_curves)
+  taux.py              interpolation (méthode Bank Al-Maghrib : monétaire < 1 an, actuariel au-delà)
+  spreads.py           spread de chaque titre selon sa nature
+  export.py            classeur Excel (détail + récapitulatifs)
+data/historique_taux.csv   historique des taux BDT (piliers 13 semaines à 30 ans, depuis fin 2014)
+sync_bdt_curves.py     remplit le cache Supabase depuis un poste qui accède au site de BAM
+tests/                 contrôles des règles de calcul
 ```
 
----
+## Traitement du fichier Maroclear
 
-## Format du fichier Maroclear attendu
+Le fichier est déposé tel qu'il est reçu (`REPV_0001_ALL_jjmmaaaa.zip`). Le bloc `<Debts>` est lu avec
+ses dates de coupon, puis : colonnes renommées en français, espaces et cellules vides nettoyés, dates et
+nombres typés, doublons d'ISIN supprimés, taux saisis en points de base corrigés, montant émis
+reconstitué, codes traduits (type de taux, remboursement, périodicité, statut), nature déduite
+(ordinaire, subordonnée, perpétuelle, convertible, titrisation), prochain coupon et prochaine révision.
+Les anomalies sont signalées sans supprimer la ligne.
 
-Fichier Excel `.xlsx` exporté depuis Maroclear (format `REPVS*.xlsx`).
+## Courbe BDT
 
-Colonnes obligatoires :
+Pour chaque date d'émission :
+1. l'historique des taux (`data/historique_taux.csv`) si la date y figure ;
+2. sinon la courbe publiée par Bank Al-Maghrib pour cette date (cache `data/courbes_bam/`, table
+   Supabase `bdt_curves`, puis site BAM),
+   interpolée comme dans le pricer : date de base = date de valeur la plus récente du tableau,
+   maturité = échéance − date de base ;
+3. si BAM n'a rien publié (week-end, jour férié), jour ouvré précédent, jusqu'à 10 jours.
 
-| Colonne | Description |
+Le site de BAM refuse les connexions venant de Streamlit Cloud (HTTP 403) : l'application en ligne lit
+alors les caches, que `sync_bdt_curves.py` complète depuis un poste du bureau :
+
+```bash
+python sync_bdt_curves.py --maroclear REPV_0001_ALL_13112026.zip
+```
+
+## Spread selon la nature du titre
+
+Spread (pb) = taux facial − taux BDT de la courbe de la date d'émission, pour la durée suivante :
+
+| Titre | Durée de référence |
 |---|---|
-| `INSTRID` | Identifiant unique de l'instrument |
-| `INSTRCTGRY` | Catégorie : `TCN`, `BDT`, `OBL_ORDN`… |
-| `ENGLONGNAME` | Nom long de l'instrument |
-| `ENGPREFERREDNAME` | Nom court de l'instrument |
-| `PREFERREDNAMEISSUER` | Nom de l'émetteur |
-| `ISSUEDT` | Date d'émission |
-| `MATURITYDT_L` | Date d'échéance |
-| `INTERESTRATE` | Taux d'intérêt nominal |
+| Taux fixe, in fine | de l'émission à l'échéance |
+| Taux fixe, amortissable | durée de vie moyenne (remboursement par parts égales) |
+| Taux révisable | période de révision (= périodicité du coupon) |
+| Zéro-coupon, taux fictif | pas de spread |
 
----
-
-## Variables d'environnement / Secrets
-
-| Variable | Description | Valeur par défaut |
-|---|---|---|
-| `USERNAME` | Login de l'application | `spreadABB` |
-| `PASSWORD` | Mot de passe de l'application | *(non communiqué)* |
-
----
-
-## Dépendances principales
-
-| Package | Usage |
-|---|---|
-| `streamlit` | Interface web |
-| `pandas` | Manipulation des données |
-| `openpyxl` | Lecture/écriture Excel |
-| `aiohttp` | Téléchargement async des courbes BAM |
-| `beautifulsoup4` | Scraping bkam.ma |
-| `python-dateutil` | Calculs de maturité |
-=======
-# SPRDABB-BSF-BT-CD-OBLIG
-SPREAD DES BT BSF CD OBLIG
->>>>>>> 0598971e930530cdec79064431656aaa9a65f772
+Aucune borne n'est appliquée aux spreads.
