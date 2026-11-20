@@ -26,7 +26,7 @@ key = "..."
 
 ```
 app.py                 connexion, navigation, dépôt du fichier Maroclear
-vues/                  pages : tableau de bord, univers des titres, spreads, courbe, risque, import
+vues/                  pages : tableau de bord, univers des titres, spreads, émetteurs, courbe, risque, import
 spreadabb/
   maroclear.py         lecture du REPV_*.zip / .xml, nettoyage, renommage, classement des titres
   referentiels.py      libellés des codes Maroclear, secteurs, émetteurs bancaires
@@ -75,6 +75,14 @@ Spread (pb) = taux facial − taux BDT de la courbe de la date d'émission, pour
 | Taux fixe, in fine | de l'émission à l'échéance |
 | Taux fixe, amortissable | durée de vie moyenne (remboursement par parts égales) |
 | Taux révisable | période de révision (= périodicité du coupon) |
+| CD, BSF, BT | de l'émission à l'échéance (taux monétaire sous un an) ; période de révision si révisable |
 | Zéro-coupon, taux fictif | pas de spread |
+| Bon du Trésor | pas de spread (c'est la courbe de référence) |
 
-Aucune borne n'est appliquée aux spreads.
+Aucune borne n'est appliquée aux spreads. Les fonds de titrisation (FT / FPCT) sont retirés au chargement.
+
+## Émetteurs
+
+Encours en circulation = nominal actuel × nombre de titres. La page Émetteurs donne pour chaque émetteur
+son encours, sa part, ses instruments, sa maturité résiduelle et son spread moyen pondérés par l'encours,
+puis le détail : répartition par instrument, type de taux et mode de remboursement, échéancier et titres.

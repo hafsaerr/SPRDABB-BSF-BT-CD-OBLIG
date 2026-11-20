@@ -44,6 +44,7 @@ pages = [
     st.Page("vues/tableau.py", title="Tableau de bord", icon=":material/space_dashboard:", default=True),
     st.Page("vues/titres.py", title="Univers des titres", icon=":material/table_rows:"),
     st.Page("vues/spreads.py", title="Spreads", icon=":material/scatter_plot:"),
+    st.Page("vues/emetteurs.py", title="Émetteurs", icon=":material/account_balance:"),
     st.Page("vues/courbe.py", title="Courbe BDT", icon=":material/show_chart:"),
     st.Page("vues/risque.py", title="Risque de crédit", icon=":material/warning:"),
     st.Page("vues/import_donnees.py", title="Import et nettoyage", icon=":material/upload_file:"),

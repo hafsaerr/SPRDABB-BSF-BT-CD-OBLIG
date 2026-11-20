@@ -12,20 +12,35 @@ entete("Spreads d'émission",
        "Taux facial − taux BDT à la date d'émission, selon la nature de chaque titre. Aucune borne n'est appliquée.")
 exiger_titres()
 
-tous = st.toggle("Inclure les titres échus")
+TYPES = {"Obligations": "Obligations", "CD": "Certificats de dépôt", "BSF": "Bons de sociétés de financement",
+         "BT": "Billets de trésorerie"}
+a, b = st.columns([3, 1])
+choix = a.segmented_control("Type de titre", list(TYPES), default="Obligations", format_func=lambda k: TYPES[k],
+                            key="s_type") or "Obligations"
+tous = b.toggle("Inclure les titres échus")
 base = titres(tous)
+base = base[base["famille"].eq("Obligations")] if choix == "Obligations" else base[base["instrument"].eq(choix)]
 base = base[base["spread_pb"].notna()].copy()
 base["banque"] = base["banque"].map({True: "Oui", False: "Non"})
+if choix != "Obligations":
+    st.caption(f"{TYPES[choix]} : taux facial − taux BDT de même maturité (de l'émission à l'échéance), sur la courbe "
+               "de la date d'émission ; taux monétaire en dessous d'un an, comme la courbe de Bank Al-Maghrib. "
+               "Pour un titre révisable, la maturité retenue est la période de révision.")
 
 with st.container(border=True):
     sel = {}
-    for cle, lib in [("instrument", "Instrument"), ("nature", "Nature"), ("type_taux", "Type de taux"),
-                     ("remboursement", "Remboursement"), ("banque", "Émetteur bancaire")]:
-        sel[cle] = st.pills(lib, base[cle].value_counts().index.tolist(), selection_mode="multi", key=f"s_{cle}")
+    filtres = [("type_taux", "Type de taux"), ("remboursement", "Remboursement"), ("banque", "Émetteur bancaire")]
+    if choix == "Obligations":
+        filtres = [("instrument", "Instrument"), ("nature", "Nature")] + filtres
+    for cle, lib in filtres:
+        sel[cle] = st.pills(lib, base[cle].value_counts().index.tolist(), selection_mode="multi", key=f"s_{choix}_{cle}")
     tranches = sorted(base["tranche_maturite"].dropna().unique(), key=ordre_tranche)
-    sel["tranche_maturite"] = st.pills("Tranche de maturité", tranches, selection_mode="multi", key="s_tranche")
+    sel["tranche_maturite"] = st.pills("Tranche de maturité", tranches, selection_mode="multi", key=f"s_{choix}_tranche")
     c1, c2, c3 = st.columns([2, 1, 1])
-    secteurs = c1.multiselect("Secteur", sorted(base["secteur"].dropna().unique()), placeholder="Tous")
+    secteurs = c1.multiselect("Secteur", sorted(base["secteur"].dropna().unique()), placeholder="Tous",
+                              key=f"s_{choix}_secteur")
+    emetteurs = c1.multiselect("Émetteur", sorted(base["emetteur"].dropna().unique()), placeholder="Tous",
+                               key=f"s_{choix}_emetteur")
     du = c2.date_input("Émis à partir du", value=None, format="DD/MM/YYYY")
     au = c3.date_input("Émis jusqu'au", value=None, format="DD/MM/YYYY")
 
@@ -35,6 +50,8 @@ for cle, v in sel.items():
         L = L[L[cle].isin(v)]
 if secteurs:
     L = L[L["secteur"].isin(secteurs)]
+if emetteurs:
+    L = L[L["emetteur"].isin(emetteurs)]
 if du:
     L = L[L["date_emission"] >= du]
 if au:
@@ -51,8 +68,11 @@ g, d = st.columns(2)
 with g.container(border=True):
     a, b = st.columns([1, 1])
     a.markdown("**Spread selon la durée de référence**")
-    par = b.segmented_control("Couleur", ["Instrument", "Nature", "Taux"], default="Instrument", label_visibility="collapsed")
-    cle = {"Instrument": "instrument", "Nature": "nature", "Taux": "type_taux"}[par or "Instrument"]
+    options = ["Instrument", "Nature", "Taux", "Remb."] if choix == "Obligations" else ["Taux", "Remb.", "Banque"]
+    par = b.segmented_control("Couleur", options, default=options[0], label_visibility="collapsed",
+                              key=f"s_{choix}_couleur") or options[0]
+    cle = {"Instrument": "instrument", "Nature": "nature", "Taux": "type_taux", "Remb.": "remboursement",
+           "Banque": "banque"}[par]
     fig = go.Figure()
     for i, (k, grp) in enumerate(L.groupby(cle)):
         fig.add_scatter(x=grp["duree_reference_ans"], y=grp["spread_pb"], mode="markers", name=k,
@@ -70,7 +90,7 @@ with g.container(border=True):
 with d.container(border=True):
     st.markdown("**Dispersion par tranche de maturité**")
     fig = go.Figure()
-    for i, (k, grp) in enumerate(L.groupby("instrument")):
+    for i, (k, grp) in enumerate(L.groupby("instrument" if choix == "Obligations" else "type_taux")):
         fig.add_box(x=grp["tranche_maturite"], y=grp["spread_pb"], name=k, marker=dict(color=couleur(k, i), size=4),
                     boxpoints="outliers", line=dict(width=1.4))
     ordre = sorted(L["tranche_maturite"].unique(), key=ordre_tranche)
@@ -80,9 +100,11 @@ with d.container(border=True):
     st.plotly_chart(mise_en_page(fig, 470, legend=dict(orientation="h", y=-0.25)), width="stretch")
 
 with st.container(border=True):
-    st.markdown("**Spread moyen (pb) par instrument et tranche de maturité** · nombre de titres entre parenthèses")
-    moy = L.pivot_table(index="instrument", columns="tranche_maturite", values="spread_pb", aggfunc="mean")
-    cpt = L.pivot_table(index="instrument", columns="tranche_maturite", values="spread_pb", aggfunc="count")
+    ligne = "instrument" if choix == "Obligations" else "emetteur"
+    st.markdown(f"**Spread moyen (pb) par {'instrument' if ligne == 'instrument' else 'émetteur'} et tranche de "
+                "maturité** · nombre de titres entre parenthèses")
+    moy = L.pivot_table(index=ligne, columns="tranche_maturite", values="spread_pb", aggfunc="mean")
+    cpt = L.pivot_table(index=ligne, columns="tranche_maturite", values="spread_pb", aggfunc="count")
     ordre = [c for c in sorted(moy.columns, key=ordre_tranche)]
     tab = pd.DataFrame({c: [f"{nb(m, 1)} ({int(n)})" if pd.notna(m) else "" for m, n in zip(moy[c], cpt[c])]
                         for c in ordre}, index=moy.index)

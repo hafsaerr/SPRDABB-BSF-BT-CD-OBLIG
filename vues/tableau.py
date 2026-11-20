@@ -8,11 +8,11 @@ from vues.commun import couleur, entete, exiger_titres, fiche, historique, kpis,
 entete("Tableau de bord", "Vue d'ensemble des titres en vie")
 t = exiger_titres()
 
-oblig = t[t["famille"].isin(["Obligations", "Titrisation"])]
+oblig = t[t["famille"].eq("Obligations")]
 s = oblig["spread_pb"].dropna()
 kpis([
     ("Titres en vie", nb(len(t)), f"{nb((t['anomalies'] != '').sum())} avec anomalie"),
-    ("Obligations et titrisations", nb(len(oblig)),
+    ("Obligations", nb(len(oblig)),
      f"{nb((t['famille'] == 'TCN').sum())} TCN · {nb((t['famille'] == 'Trésor').sum())} BDT"),
     ("Taux révisable", nb((t["type_taux"] == "Révisable").sum()), "révision à chaque coupon"),
     ("Amortissables", nb((t["remboursement"] == "Amortissable").sum()), "les autres sont in fine"),
@@ -29,8 +29,8 @@ with g.container(border=True):
                            marker=dict(colors=[couleur(x, i) for i, x in enumerate(n.index)], line=dict(color="#fff", width=2))))
     st.plotly_chart(mise_en_page(fig, 320, legend=dict(orientation="v", x=1, y=0.5)), width="stretch")
 with d.container(border=True):
-    st.markdown("**Encours émis en vie par secteur** (Md MAD, hors État)")
-    sec = t[t["secteur"] != "ÉTAT"].groupby("secteur")["montant_emis"].sum().sort_values().tail(14) / 1e9
+    st.markdown("**Encours en circulation par secteur** (Md MAD, hors État)")
+    sec = t[t["secteur"] != "ÉTAT"].groupby("secteur")["encours"].sum().sort_values().tail(14) / 1e9
     fig = go.Figure(go.Bar(x=sec.values, y=sec.index, orientation="h", marker_color="#7f6c66",
                            hovertemplate="%{y}<br>%{x:.2f} Md MAD<extra></extra>"))
     st.plotly_chart(mise_en_page(fig, 320), width="stretch")

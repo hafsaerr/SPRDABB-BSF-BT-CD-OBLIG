@@ -168,6 +168,11 @@ def nettoyer(brut: pd.DataFrame, coupons: pd.DataFrame, rapport: Rapport,
         [tcn, cat.eq("BDT"), cat.isin(["OBL_ORDN", "OBL_SUBD", "OBL_CONV"]), cat.eq("FPCT")],
         ["TCN", "Trésor", "Obligations", "Titrisation"], "Autre")
 
+    # Fonds de titrisation (FT / FPCT) : hors du périmètre de l'application
+    titrisation = df["famille"].eq("Titrisation")
+    df, lib, premier, cat = df[~titrisation], lib[~titrisation], premier[~titrisation], cat[~titrisation]
+    rapport.etape("Fonds de titrisation retirés", int(titrisation.sum()))
+
     # Catégorie Maroclear « ordinaire » alors que le libellé indique une dette subordonnée
     sub_libelle = cat.eq("OBL_ORDN") & lib.str.contains(r"\bSUB\b|SUBORD")
     noter(sub_libelle, "Classé ordinaire, libellé subordonné (corrigé)")
@@ -191,6 +196,8 @@ def nettoyer(brut: pd.DataFrame, coupons: pd.DataFrame, rapport: Rapport,
     df["maturite_initiale_ans"] = (df["maturite_initiale_j"] / 365.25).round(2)
     df["maturite_residuelle_ans"] = ((ec - pd.Timestamp(auj)).dt.days / 365.25).clip(lower=0).round(2)
     df["en_vie"] = df["statut_code"].eq("ACTI") & (ec >= pd.Timestamp(auj))
+    # Encours en circulation : nominal actuel (après amortissements) × nombre de titres
+    df["encours"] = (df["nominal_actuel"] * df["nb_titres"]).fillna(df["montant_emis"])
     df["tranche_maturite"] = df["maturite_initiale_j"].map(tranche_maturite)
 
     # 11. Calendrier des coupons

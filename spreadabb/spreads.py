@@ -5,7 +5,8 @@ du titre :
 - taux fixe, in fine            : durée jusqu'à l'échéance ;
 - taux fixe, amortissable       : durée de vie moyenne (amortissement constant) ;
 - taux révisable                : période de révision (= périodicité du coupon) ;
-- zéro-coupon ou taux fictif    : pas de spread.
+- zéro-coupon ou taux fictif    : pas de spread ;
+- bon du Trésor                 : pas de spread (c'est la courbe de référence).
 Aucune borne n'est appliquée aux spreads obtenus.
 """
 from __future__ import annotations
@@ -39,6 +40,8 @@ def _code(v) -> str:
 def base_de_calcul(t) -> tuple[str | None, float | None, str | None]:
     """(méthode, durée en jours, motif d'exclusion) pour une ligne de titre."""
     d0, ech = t.date_emission, t.date_echeance
+    if t.instrument == "BDT":
+        return None, None, "Bon du Trésor : c'est la courbe de référence"
     if d0 is None or ech is None or pd.isna(d0) or pd.isna(ech) or (ech - d0).days <= 0:
         return None, None, "Dates incomplètes"
     if t.type_taux == "Zéro-coupon":
@@ -51,7 +54,7 @@ def base_de_calcul(t) -> tuple[str | None, float | None, str | None]:
         mois = R.MOIS_PAR_PERIODE.get(_code(t.periodicite_code), 12)
         jours = min(((d0 + relativedelta(months=mois)) - d0).days, (ech - d0).days)
         return f"Révisable : période de {mois} mois", jours, None
-    if t.remboursement == "Amortissable":
+    if t.remboursement in ("Amortissable", "Par tranches"):
         mois = R.MOIS_PAR_PERIODE.get(_code(t.frequence_amort_code) or _code(t.periodicite_code), 12)
         return "Amortissable : vie moyenne", vie_moyenne_jours(d0, ech, mois), None
     return "Maturité jusqu'à l'échéance", (ech - d0).days, None
