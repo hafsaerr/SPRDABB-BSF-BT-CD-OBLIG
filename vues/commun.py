@@ -106,8 +106,12 @@ def dt(v):
 # ── Données ──────────────────────────────────────────────────────────────────
 
 @st.cache_resource(show_spinner=False)
-def source_bam() -> SourceBAM:
+def _source_bam(version: str) -> SourceBAM:
     return SourceBAM()
+
+
+def source_bam() -> SourceBAM:
+    return _source_bam(VERSION_TRAITEMENT)
 
 
 @st.cache_data(show_spinner=False)
@@ -137,8 +141,11 @@ def _traiter(cle: str, nom: str, contenu: bytes, jour: date):
     return titres, coupons, rapport, courbes
 
 
+VERSION_TRAITEMENT = "2026-11-20b"  # à changer à chaque évolution du traitement : force un nouveau calcul
+
+
 def charger_fichier(nom: str, contenu: bytes) -> None:
-    cle = hashlib.md5(contenu).hexdigest()
+    cle = f"{VERSION_TRAITEMENT}-{hashlib.md5(contenu).hexdigest()}"
     if st.session_state.get("cle_fichier") == cle:
         return
     with st.spinner("Traitement du fichier Maroclear : nettoyage, puis recherche des courbes BDT "
